@@ -1,3 +1,8 @@
 <Solution>
-  <Project Path="SecurityApp/TalonSecurity.csproj" />
+  <Project Path="API/API.csproj" Id="ca659e71-2e12-4910-b2ce-d93983e44b20" />
+  <Project Path="Application/Application.csproj" Id="3fbf51e6-0a23-4264-8e2d-9d55aafd612b" />
+  <Project Path="Domain/Domain.csproj" Id="1d1ea8e5-2742-44c3-9290-5698191dd97d" />
+  <Project Path="Infrastructure/Infrastructure.csproj" Id="58d954d7-71a3-4b3d-a26e-efc719c8e19c" />
+  <Project Path="Shared/Shared.csproj" Id="79359cd1-c6fd-4468-b3cb-788d4056c10f" />
+  <Project Path="UI/UI.csproj" Id="4a1c8db2-cba6-46e8-a846-fae076efadee" />
 </Solution>
