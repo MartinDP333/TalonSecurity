@@ -1,0 +1,57 @@
+services:
+  db_nextcloud:
+    image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password
+    restart: unless-stopped
+    volumes:
+      - mysql_data:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=RootPass123$
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+      - MYSQL_PASSWORD=nextcloudPass123$
+
+  db_mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    restart: unless-stopped
+    ports:
+      - "1433:1433"
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=MyPass123$
+    volumes:
+      - mssql_data:/var/opt/mssql
+
+  nextcloud:
+    image: nextcloud:latest
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - nextcloud_data:/var/www/html
+    environment:
+      - MYSQL_HOST=db_nextcloud
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+      - MYSQL_PASSWORD=nextcloudPass123$
+    depends_on:
+      - db_nextcloud
+
+  waf:
+      image: owasp/modsecurity-crs:nginx
+      restart: unless-stopped
+      ports:
+        - "80:8080"
+      environment:
+        - BACKEND=http://nextcloud:80
+        - PROXY=1
+        - SERVER_NAME=localhost
+        - ModSecRuleEngine=On
+        - PORT=8080
+      depends_on:
+        - nextcloud
+
+volumes:
+  mysql_data:
+  mssql_data:
+  nextcloud_data:
