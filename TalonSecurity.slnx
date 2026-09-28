@@ -5,4 +5,5 @@
   <Project Path="Infrastructure/Infrastructure.csproj" Id="58d954d7-71a3-4b3d-a26e-efc719c8e19c" />
   <Project Path="Shared/Shared.csproj" Id="79359cd1-c6fd-4468-b3cb-788d4056c10f" />
   <Project Path="UI/UI.csproj" Id="4a1c8db2-cba6-46e8-a846-fae076efadee" />
+  <Project Path="Worker/Worker.csproj" />
 </Solution>

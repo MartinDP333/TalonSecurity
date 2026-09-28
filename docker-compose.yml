@@ -1,4 +1,60 @@
+version: '3.8'
+
 services:
+  # 1. C# API Mikroservice (Ingestion)
+  api:
+    build:
+      context: .
+      dockerfile: API/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=db_mssql;Database=TalonSecurityDb;User=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True
+      - RabbitMQ__HostName=rabbitmq
+    depends_on:
+      - db_mssql
+      - rabbitmq
+
+  # 2. C# Background Worker (Processing & Rules)
+  worker:
+    build:
+      context: .
+      dockerfile: Worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=db_mssql;Database=TalonSecurityDb;User=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True
+      - RabbitMQ__HostName=rabbitmq
+    depends_on:
+      - db_mssql
+      - rabbitmq
+
+  # 3. Message Broker
+  rabbitmq:
+    image: rabbitmq:3-management
+    restart: unless-stopped
+    ports:
+      - "5672:5672"   # RabbitMQ protokol port
+      - "15672:15672" # RabbitMQ Web Management UI
+    environment:
+      - RABBITMQ_DEFAULT_USER=talon_admin
+      - RABBITMQ_DEFAULT_PASS=secureRabbitPass123
+
+  # 4. MS SQL Database
+  db_mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    restart: unless-stopped
+    ports:
+      - "1433:1433"
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
+    volumes:
+      - mssql_data:/var/opt/mssql
+
+  # 5. Nextcloud Database (MySQL)
   db_nextcloud:
     image: mysql:8.0
     command: --default-authentication-plugin=mysql_native_password
@@ -11,17 +67,7 @@ services:
       - MYSQL_USER=nextcloud
       - MYSQL_PASSWORD=${NEXTCLOUD_DB_PASSWORD}
 
-  db_mssql:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    restart: unless-stopped
-    ports:
-      - "1433:1433"
-    environment:
-      - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
-    volumes:
-      - mssql_data:/var/opt/mssql
-
+  # 6. Nextcloud Service
   nextcloud:
     image: nextcloud:latest
     restart: unless-stopped
@@ -37,6 +83,7 @@ services:
     depends_on:
       - db_nextcloud
 
+  # 7. WAF
   waf:
     image: owasp/modsecurity-crs:nginx
     restart: unless-stopped
