@@ -38,7 +38,6 @@ public class ThreatLog : BaseEntity
         LastSeenAt = DateTime.UtcNow;
     }
 
-    // Forretningsmetode til Smart Logging (Dublet-aggregering)
     public void RegisterNewHit()
     {
         HitCount++;

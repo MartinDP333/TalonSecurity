@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # 1. C# API Mikroservice (Ingestion)
   api:
@@ -31,23 +29,23 @@ services:
       - db_mssql
       - rabbitmq
 
-  # 3. Message Broker
+# 3. Message Broker
   rabbitmq:
     image: rabbitmq:3-management
     restart: unless-stopped
     ports:
-      - "5672:5672"   # RabbitMQ protokol port
-      - "15672:15672" # RabbitMQ Web Management UI
+      - "5672:5672"
+      - "15672:15672"
     environment:
-      - RABBITMQ_DEFAULT_USER=talon_admin
-      - RABBITMQ_DEFAULT_PASS=secureRabbitPass123
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
 
   # 4. MS SQL Database
   db_mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
     restart: unless-stopped
     ports:
-      - "1433:1433"
+      - "1533:1433"
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}

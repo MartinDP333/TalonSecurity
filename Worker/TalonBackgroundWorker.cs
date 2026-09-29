@@ -18,9 +18,6 @@ public class TalonBackgroundWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            // Her vil din worker køre sin baggrundslogik, 
-            // f.eks. tjekke køer, rydde op i gamle trusler eller køre regelsæt.
-
             _logger.LogInformation("Worker tjekker systemstatus kl: {time}", DateTimeOffset.Now);
 
             await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);

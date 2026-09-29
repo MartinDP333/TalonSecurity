@@ -1,4 +1,3 @@
-using Infrastructure; // Antager din DI til database ligger her
 using Worker;
 
 var host = Host.CreateDefaultBuilder(args)
