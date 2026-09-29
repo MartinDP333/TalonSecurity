@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db-mssql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: db-mssql
+  template:
+    metadata:
+      labels:
+        app: db-mssql
+    spec:
+      containers:
+      - name: mssql
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        ports:
+        - containerPort: 1433
+        env:
+        - name: ACCEPT_EULA
+          value: "Y"
+        - name: MSSQL_SA_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: talon-secrets
+              key: MSSQL_SA_PASSWORD
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-mssql
+spec:
+  ports:
+  - port: 1433
+    targetPort: 1433
+  selector:
+    app: db-mssql

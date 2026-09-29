@@ -364,3 +364,4 @@ FodyWeavers.xsd
 
 # .NET Core Secret Manager
 .env
+secret.yaml

@@ -11,6 +11,13 @@ builder.Services.AddControllers();
 
 var app = builder.Build();
 
+// TEST-ENDPOINT
+app.MapGet("/api/health", () => new {
+    Status = "Healthy",
+    Message = "Talon API kører perfekt i Kubernetes!",
+    Timestamp = DateTime.UtcNow
+});
+
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<SecurityDbContext>();
