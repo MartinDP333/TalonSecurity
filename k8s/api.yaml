@@ -30,6 +30,16 @@ spec:
           value: "Server=db-mssql;Database=TalonSecurityDb;User Id=sa;Password=$(MSSQL_SA_PASSWORD);TrustServerCertificate=True"
         - name: RabbitMQ__HostName
           value: "rabbitmq"
+        - name: RabbitMQ__UserName
+          valueFrom:
+            secretKeyRef:
+              name: talon-secrets
+              key: RABBITMQ_DEFAULT_USER
+        - name: RabbitMQ__Password
+          valueFrom:
+            secretKeyRef:
+              name: talon-secrets
+              key: RABBITMQ_DEFAULT_PASS
 ---
 apiVersion: v1
 kind: Service
