@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: talon-worker
+  labels:
+    app: talon-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: talon-worker
+  template:
+    metadata:
+      labels:
+        app: talon-worker
+    spec:
+      containers:
+      - name: worker
+        image: martin313/talon-worker:latest
+        imagePullPolicy: Always
+        env:
+        - name: RabbitMQ__HostName
+          value: "rabbitmq"
+        - name: RabbitMQ__UserName
+          valueFrom:
+            secretKeyRef:
+              name: talon-secrets
+              key: RABBITMQ_DEFAULT_USER
+        - name: RabbitMQ__Password
+          valueFrom:
+            secretKeyRef:
+              name: talon-secrets   
+              key: RABBITMQ_DEFAULT_PASS
+        resources:
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+          requests:
+            memory: "256Mi"
+            cpu: "250m"

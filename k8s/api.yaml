@@ -14,8 +14,8 @@ spec:
     spec:
       containers:
       - name: api
-        image: martin313/talon-api:latest
-        imagePullPolicy: Always  
+        image: martin313/talon-api:messaging-fix-20261014
+        imagePullPolicy: Always
         ports:
         - containerPort: 8080
         env:
