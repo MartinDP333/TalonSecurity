@@ -1,12 +1,11 @@
+using System.Net;
+using API.Middleware;
 using Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
 using MassTransit;
-using Infrastructure.Consumers;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
-
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-                       ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddControllers();
@@ -15,9 +14,15 @@ builder.Services.AddMassTransit(x =>
 {
     x.UsingRabbitMq((context, cfg) =>
     {
-        var hostName = Environment.GetEnvironmentVariable("RabbitMQ__HostName") ?? "rabbitmq";
-        var userName = Environment.GetEnvironmentVariable("RabbitMQ__UserName") ?? "guest";
-        var password = Environment.GetEnvironmentVariable("RabbitMQ__Password") ?? "guest";
+        var hostName = builder.Configuration["RabbitMQ:HostName"]
+                       ?? Environment.GetEnvironmentVariable("RabbitMQ__HostName")
+                       ?? "rabbitmq";
+        var userName = builder.Configuration["RabbitMQ:UserName"]
+                       ?? Environment.GetEnvironmentVariable("RabbitMQ__UserName")
+                       ?? "guest";
+        var password = builder.Configuration["RabbitMQ:Password"]
+                       ?? Environment.GetEnvironmentVariable("RabbitMQ__Password")
+                       ?? "guest";
 
         cfg.Host(hostName, "/", h =>
         {
@@ -29,12 +34,24 @@ builder.Services.AddMassTransit(x =>
     });
 });
 
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Add(
+        System.Net.IPNetwork.Parse("10.244.0.0/24"));
+    options.ForwardLimit = 1;
+});
+
 var app = builder.Build();
 
-// TEST ENDPOINT
-app.MapGet("/api/health", () => new {
+app.UseForwardedHeaders();
+app.UseMiddleware<IpBlockingMiddleware>();
+app.UseMiddleware<TrafficTrackingMiddleware>();
+
+app.MapGet("/api/health", () => new
+{
     Status = "Healthy",
-    Message = "Talon API kører perfekt i Kubernetes!",
+    Message = "Talon API kører i Kubernetes!",
     Timestamp = DateTime.UtcNow
 });
 

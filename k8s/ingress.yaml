@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: talon-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/use-forwarded-headers: "true"
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: talon-api-service
+            port:
+              number: 80

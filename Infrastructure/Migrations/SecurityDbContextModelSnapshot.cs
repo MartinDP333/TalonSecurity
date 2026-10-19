@@ -92,6 +92,9 @@ namespace Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("BlockedUntil")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("IpAddress")
                         .IsRequired()
                         .HasMaxLength(45)
@@ -106,7 +109,7 @@ namespace Infrastructure.Migrations
                     b.Property<int>("RiskScore")
                         .HasColumnType("int");
 
-                    b.Property<Guid>("TenantId")
+                    b.Property<Guid?>("TenantId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("TotalIncidents")
@@ -115,7 +118,8 @@ namespace Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("TenantId", "IpAddress")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[TenantId] IS NOT NULL");
 
                     b.ToTable("IpReputations");
                 });
@@ -332,8 +336,7 @@ namespace Infrastructure.Migrations
                     b.HasOne("Domain.Entities.Tenant", "Tenant")
                         .WithMany("IpReputations")
                         .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Tenant");
                 });

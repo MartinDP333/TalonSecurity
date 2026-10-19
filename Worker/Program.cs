@@ -1,14 +1,28 @@
-using MassTransit;
 using Infrastructure.Consumers;
+using Infrastructure.Persistence;
+using MassTransit;
+using Microsoft.EntityFrameworkCore;
+using StackExchange.Redis;
+using Worker.Consumers;
 
 var host = Host.CreateDefaultBuilder(args)
     .ConfigureServices((hostContext, services) =>
     {
         var configuration = hostContext.Configuration;
 
+        var redisConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__Redis") ?? "localhost:6379";
+        services.AddSingleton<IConnectionMultiplexer>(sp => ConnectionMultiplexer.Connect(redisConnectionString));
+
+        var sqlConnectionString = configuration.GetConnectionString("DefaultConnection")
+                                  ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
+
+        services.AddDbContext<SecurityDbContext>(options =>
+            options.UseSqlServer(sqlConnectionString));
+
         services.AddMassTransit(x =>
         {
             x.AddConsumer<MessageReceivedConsumer>();
+            x.AddConsumer<TrafficEventConsumer>();
 
             x.UsingRabbitMq((context, cfg) =>
             {
@@ -22,11 +36,20 @@ var host = Host.CreateDefaultBuilder(args)
                     h.Password(password);
                 });
 
-                cfg.ConfigureEndpoints(context);
+                cfg.ReceiveEndpoint("traffic-event", e =>
+                {
+                    e.ConfigureConsumer<TrafficEventConsumer>(context);
+                });
+
+                cfg.ReceiveEndpoint("message-received", e =>
+                {
+                    e.ConfigureConsumer<MessageReceivedConsumer>(context);
+                });
             });
         });
 
     })
     .Build();
+
 
 await host.RunAsync();

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace Domain.Entities;
@@ -8,7 +8,6 @@ public class Tenant : BaseEntity
     public string Name { get; private set; }
     public DateTime CreatedAt { get; private set; }
 
-    // Navigation properties
     public ICollection<ThreatLog> ThreatLogs { get; private set; } = new List<ThreatLog>();
     public ICollection<IpReputation> IpReputations { get; private set; } = new List<IpReputation>();
     public ICollection<AlertRule> AlertRules { get; private set; } = new List<AlertRule>();
@@ -18,10 +17,16 @@ public class Tenant : BaseEntity
 
     private Tenant() { }
 
-    public Tenant(string name)
+    public Tenant(Guid id, string name)
     {
+        Id = id;
         Name = !string.IsNullOrWhiteSpace(name) ? name : throw new ArgumentException("Tenant skal have et navn", nameof(name));
         CreatedAt = DateTime.UtcNow;
+    }
+
+    public Tenant(string name)
+        : this(Guid.NewGuid(), name)
+    {
     }
 
     public void UpdateName(string newName)

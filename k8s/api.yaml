@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: talon-api
 spec:
-  replicas: 2 
+  replicas: 2
   selector:
     matchLabels:
       app: talon-api
@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: api
-        image: martin313/talon-api:messaging-fix-20261014
+        image: martin313/talon-api:trusted-proxy-cidr-20261015
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
@@ -46,10 +46,10 @@ kind: Service
 metadata:
   name: talon-api-service
 spec:
-  type: NodePort 
+  type: ClusterIP
   ports:
-  - port: 80
+  - name: http
+    port: 80
     targetPort: 8080
-    nodePort: 30080
   selector:
     app: talon-api
