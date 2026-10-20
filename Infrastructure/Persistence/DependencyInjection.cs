@@ -1,4 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Application.Interfaces;
+using Infrastructure.Services;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -13,6 +15,9 @@ public static class DependencyInjection
 
         services.AddDbContext<SecurityDbContext>(options =>
             options.UseSqlServer(connectionString));
+
+        services.AddScoped<IIpReputationRepository, IpReputationRepository>();
+        services.AddScoped<IThreatLogService, ThreatLogService>();
 
         return services;
     }

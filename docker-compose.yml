@@ -1,49 +1,75 @@
 services:
-  # 1. Nextcloud Database (MySQL)
-  db_nextcloud:
-    image: mysql:8.0
-    command: --default-authentication-plugin=mysql_native_password
+  db-mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
     restart: unless-stopped
-    volumes:
-      - mysql_data:/var/lib/mysql
     environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-      - MYSQL_DATABASE=nextcloud
-      - MYSQL_USER=nextcloud
-      - MYSQL_PASSWORD=${NEXTCLOUD_DB_PASSWORD}
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+    volumes:
+      - mssql_data:/var/opt/mssql
+    networks:
+      - talon_internal
 
-  # 2. Nextcloud Service
-  nextcloud:
-    image: nextcloud:latest
+  rabbitmq:
+    image: rabbitmq:3-management
     restart: unless-stopped
-    ports:
-      - "8080:80"
-    volumes:
-      - nextcloud_data:/var/www/html
     environment:
-      - MYSQL_HOST=db_nextcloud
-      - MYSQL_DATABASE=nextcloud
-      - MYSQL_USER=nextcloud
-      - MYSQL_PASSWORD=${NEXTCLOUD_DB_PASSWORD}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - talon_internal
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - talon_internal
+
+  talon-api:
+    build:
+      context: .
+      dockerfile: API/Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: Server=db-mssql;Database=TalonSecurityDb;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True
+      RabbitMQ__HostName: rabbitmq
+      RabbitMQ__UserName: ${RABBITMQ_DEFAULT_USER}
+      RabbitMQ__Password: ${RABBITMQ_DEFAULT_PASS}
     depends_on:
-      - db_nextcloud
+      - db-mssql
+      - rabbitmq
+    networks:
+      - talon_internal
 
-  # 3. WAF
   waf:
     image: owasp/modsecurity-crs:nginx
     restart: unless-stopped
     ports:
       - "80:8080"
     environment:
-      - BACKEND=http://nextcloud:80
-      - PROXY=1
-      - SERVER_NAME=localhost
-      - ModSecRuleEngine=On
-      - PORT=8080
+      BACKEND: http://talon-api:8080
+      PROXY: "1"
+      SERVER_NAME: localhost
+      ModSecRuleEngine: On
+      PORT: "8080"
     depends_on:
-      - nextcloud
+      - talon-api
+    networks:
+      - talon_internal
+
+networks:
+  talon_internal:
+    driver: bridge
 
 volumes:
-  mysql_data:
   mssql_data:
-  nextcloud_data:
+  rabbitmq_data:
+  redis_data:

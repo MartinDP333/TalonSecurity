@@ -1,4 +1,6 @@
+using Application.Interfaces; // <-- Husk denne
 using Domain.Entities;
+using Domain.Enums;           // <-- Og denne
 using Infrastructure.Persistence;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
@@ -14,15 +16,18 @@ public class TrafficEventConsumer : IConsumer<TrafficEvent>
     private readonly ILogger<TrafficEventConsumer> _logger;
     private readonly IConnectionMultiplexer _redis;
     private readonly SecurityDbContext _dbContext;
+    private readonly IThreatLogService _threatLogService;
 
     public TrafficEventConsumer(
         ILogger<TrafficEventConsumer> logger,
         IConnectionMultiplexer redis,
-        SecurityDbContext dbContext)
+        SecurityDbContext dbContext,
+        IThreatLogService threatLogService)
     {
         _logger = logger;
         _redis = redis;
         _dbContext = dbContext;
+        _threatLogService = threatLogService;
     }
 
     public async Task Consume(ConsumeContext<TrafficEvent> context)
@@ -76,6 +81,16 @@ public class TrafficEventConsumer : IConsumer<TrafficEvent>
                 "[SIKKERHEDSADVARSEL] IP {IpAddress} spammer systemet! Aktiverer progressiv blokering...",
                 data.IpAddress);
             reputation.ApplyProgressiveBlock();
+
+            await _threatLogService.LogThreatAsync(
+                tenantId: SystemTenantId,
+                sourceIp: data.IpAddress,
+                requestPath: data.Endpoint ?? "/api/cart/add",
+                attackType: "RateLimit / Spam",
+                severity: SeverityLevel.High,
+                rawPayload: data.UserAgent ?? "Ukendt",
+                countryCode: "DK"
+            );
         }
 
         try

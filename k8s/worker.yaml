@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: worker
-        image: martin313/talon-worker:database-fix-20261015-v3
+        image: martin313/talon-worker:latest
         imagePullPolicy: Always
         env:
         - name: RabbitMQ__HostName

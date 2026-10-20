@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Application.Interfaces;
 using Domain.Entities;
 
@@ -6,6 +6,7 @@ namespace Infrastructure.Persistence;
 
 public class SecurityDbContext : Microsoft.EntityFrameworkCore.DbContext
 {
+    private static readonly Guid SystemTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private readonly Guid? _currentTenantId;
 
     public SecurityDbContext(DbContextOptions<SecurityDbContext> options, ICurrentTenantService currentTenantService)
@@ -17,7 +18,7 @@ public class SecurityDbContext : Microsoft.EntityFrameworkCore.DbContext
     public SecurityDbContext(DbContextOptions<SecurityDbContext> options)
         : base(options)
     {
-        _currentTenantId = null;
+        _currentTenantId = SystemTenantId;
     }
 
     public DbSet<Tenant> Tenants => Set<Tenant>();

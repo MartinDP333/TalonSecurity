@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: talon-waf
+  labels:
+    app: talon-waf
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: talon-waf
+  template:
+    metadata:
+      labels:
+        app: talon-waf
+    spec:
+      securityContext:
+        fsGroup: 101
+      volumes:
+      - name: waf-audit-logs
+        emptyDir: {}
+      containers:
+      - name: waf
+        image: owasp/modsecurity-crs:nginx
+        ports:
+        - name: http
+          containerPort: 8080
+        env:
+        - name: BACKEND
+          value: "http://talon-api-service:80"
+        - name: PROXY
+          value: "1"
+        - name: SERVER_NAME
+          value: "localhost"
+        - name: ModSecRuleEngine
+          value: "On"
+        - name: MODSEC_AUDIT_ENGINE
+          value: "RelevantOnly"
+        - name: MODSEC_AUDIT_LOG
+          value: "/var/log/modsecurity/audit.log"
+        - name: MODSEC_AUDIT_LOG_FORMAT
+          value: "JSON"
+        - name: MODSEC_AUDIT_LOG_PARTS
+          value: "ABIJDEFHZ"
+        - name: MODSEC_AUDIT_LOG_RELEVANT_STATUS
+          value: "^(?:5|4(?!04))"
+        - name: PORT
+          value: "8080"
+        volumeMounts:
+        - name: waf-audit-logs
+          mountPath: /var/log/modsecurity
+      - name: waf-adapter
+        image: martin313/talon-waf-adapter:latest
+        imagePullPolicy: Always
+        env:
+        - name: RabbitMQ__HostName
+          value: "rabbitmq"
+        - name: RabbitMQ__UserName
+          valueFrom:
+            secretKeyRef:
+              name: talon-secrets
+              key: RABBITMQ_DEFAULT_USER
+        - name: RabbitMQ__Password
+          valueFrom:
+            secretKeyRef:
+              name: talon-secrets
+              key: RABBITMQ_DEFAULT_PASS
+        - name: WAF_AUDIT_LOG
+          value: "/var/log/modsecurity/audit.log"
+        volumeMounts:
+        - name: waf-audit-logs
+          mountPath: /var/log/modsecurity
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: talon-waf-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: talon-waf
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080

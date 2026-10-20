@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: api
-        image: martin313/talon-api:trusted-proxy-cidr-20261015
+        image: martin313/talon-api:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8080

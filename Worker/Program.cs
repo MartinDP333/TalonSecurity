@@ -1,5 +1,7 @@
+using Application.Interfaces;
 using Infrastructure.Consumers;
 using Infrastructure.Persistence;
+using Infrastructure.Services;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
@@ -19,10 +21,13 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddDbContext<SecurityDbContext>(options =>
             options.UseSqlServer(sqlConnectionString));
 
+        services.AddScoped<IThreatLogService, ThreatLogService>();
+
         services.AddMassTransit(x =>
         {
             x.AddConsumer<MessageReceivedConsumer>();
             x.AddConsumer<TrafficEventConsumer>();
+            x.AddConsumer<WafThreatEventConsumer>();
 
             x.UsingRabbitMq((context, cfg) =>
             {
@@ -45,11 +50,14 @@ var host = Host.CreateDefaultBuilder(args)
                 {
                     e.ConfigureConsumer<MessageReceivedConsumer>(context);
                 });
+
+                cfg.ReceiveEndpoint("waf-threat-event", e =>
+                {
+                    e.ConfigureConsumer<WafThreatEventConsumer>(context);
+                });
             });
         });
-
     })
     .Build();
-
 
 await host.RunAsync();

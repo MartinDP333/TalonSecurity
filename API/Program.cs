@@ -1,9 +1,11 @@
-using System.Net;
 using API.Middleware;
+using API.Services;
+using Application.Interfaces;
 using Infrastructure.Persistence;
 using MassTransit;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,6 +43,8 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
         System.Net.IPNetwork.Parse("10.244.0.0/24"));
     options.ForwardLimit = 1;
 });
+
+builder.Services.AddScoped<ICurrentTenantService, CurrentTenantService>();
 
 var app = builder.Build();
 
