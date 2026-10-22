@@ -1,0 +1,83 @@
+@page "/login"
+@rendermode InteractiveServer
+@using System.ComponentModel.DataAnnotations
+@inject UI.Services.TalonApiClient Api
+@inject NavigationManager Navigation
+
+@if (!authRestored || Api.IsLoggedIn)
+{
+    <p>Checking sign-in...</p>
+}
+else
+{
+<h1>Tenant login</h1>
+@if (error is not null) { <div class="alert alert-danger">@error</div> }
+<EditForm Model="model" OnValidSubmit="LoadTenantsAsync" class="col-md-6">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+    <div class="mb-3"><label class="form-label">Username</label><InputText class="form-control" @bind-Value="model.UserName" /></div>
+    <div class="mb-3"><label class="form-label">Password</label><InputText type="password" class="form-control" @bind-Value="model.Password" /></div>
+    <button class="btn btn-secondary" type="submit" disabled="@loading">@(loading ? "Loading tenants..." : "Show available tenants")</button>
+</EditForm>
+
+@if (tenants is not null)
+{
+    <div class="col-md-6 mt-3">
+        <label class="form-label">Tenant</label>
+        <select class="form-select" @bind="selectedTenant">
+            <option value="">Choose a tenant</option>
+            @foreach (var tenant in tenants)
+            {
+                <option value="@tenant.TenantName">@tenant.TenantName (@tenant.Role)</option>
+            }
+        </select>
+        <button class="btn btn-primary mt-3" @onclick="LoginAsync" disabled="@(loggingIn || string.IsNullOrWhiteSpace(selectedTenant))">@(loggingIn ? "Logging in..." : "Log in")</button>
+    </div>
+    }
+}
+
+@code {
+    private readonly LoginModel model = new();
+    private IReadOnlyList<UI.Services.TalonApiClient.AvailableTenant>? tenants;
+    private string selectedTenant = string.Empty;
+    private string? error;
+    private bool loading;
+    private bool loggingIn;
+    private bool authRestored;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Api.RestoreAuthAsync();
+        authRestored = true;
+        if (Api.IsLoggedIn)
+        {
+            Navigation.NavigateTo("/", true);
+            return;
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadTenantsAsync()
+    {
+        loading = true; error = null; tenants = await Api.GetAvailableTenantsAsync(model.UserName, model.Password); loading = false;
+        if (tenants is null) error = "Invalid username or password.";
+        else if (tenants.Count == 0) error = "This account has no active tenant memberships.";
+        else selectedTenant = tenants[0].TenantName;
+    }
+
+    private async Task LoginAsync()
+    {
+        loggingIn = true; error = null;
+        var result = await Api.LoginAsync(model.UserName, model.Password, selectedTenant);
+        loggingIn = false;
+        if (result is null) { error = "Login failed."; return; }
+        Navigation.NavigateTo("/threatlogs");
+    }
+
+    private sealed class LoginModel
+    {
+        [Required] public string UserName { get; set; } = string.Empty;
+        [Required] public string Password { get; set; } = string.Empty;
+    }
+}

@@ -21,6 +21,12 @@ public class IpBlockingMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
+        if (ClientIpAddress.IsInternal(context))
+        {
+            await _next(context);
+            return;
+        }
+
         var ipAddress = ClientIpAddress.Get(context);
 
         if (!string.IsNullOrEmpty(ipAddress))

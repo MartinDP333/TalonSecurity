@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: talon-ui
+  labels:
+    app: talon-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: talon-ui
+  template:
+    metadata:
+      labels:
+        app: talon-ui
+    spec:
+      containers:
+      - name: ui
+        image: martin313/talon-ui:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        env:
+        - name: TalonApi__BaseUrl
+          value: "http://talon-api-service/"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: talon-ui-service
+spec:
+  type: ClusterIP
+  selector:
+    app: talon-ui
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080

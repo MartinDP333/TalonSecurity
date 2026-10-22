@@ -1,0 +1,48 @@
+@inherits LayoutComponentBase
+@inject UI.Services.TalonApiClient Api
+@inject NavigationManager Navigation
+
+<nav class="navbar navbar-dark bg-dark">
+    <div class="container">
+        <a class="navbar-brand" href="/" @onclick:preventDefault @onclick="GoHome">TalonSecurity</a>
+        <div class="d-flex align-items-center gap-3">
+            @if (authReady && Api.IsLoggedIn)
+            {
+                <span class="text-light">@Api.CurrentTenantName</span>
+                <a class="nav-link text-light" href="/" @onclick:preventDefault @onclick="GoHome">Tenants</a>
+                <a class="nav-link text-light" href="/threatlogs">Threat logs</a>
+                @if (Api.IsPlatformAdmin)
+                {
+                    <a class="nav-link text-warning" href="/platform-admin">Platform admin</a>
+                }
+                @if (Api.CurrentTenantRole is "Admin" or "PlatformAdmin")
+                {
+                    <a class="nav-link text-light" href="/admin/members">Members</a>
+                }
+                <a class="nav-link text-light" href="/logout">Logout</a>
+            }
+            else if (authReady)
+            {
+                <a class="nav-link text-light" href="/login">Login</a>
+            }
+        </div>
+    </div>
+</nav>
+
+<main class="container mt-4">
+    @Body
+</main>
+
+@code {
+    private bool authReady;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Api.RestoreAuthAsync();
+        authReady = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void GoHome() => Navigation.NavigateTo("/", replace: false);
+}

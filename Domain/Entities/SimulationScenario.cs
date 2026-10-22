@@ -1,9 +1,11 @@
-﻿using System;
+using System;
 
 namespace Domain.Entities;
 
 public class SimulationScenario : BaseEntity
 {
+    public Guid TenantId { get; private set; }
+    public Tenant Tenant { get; private set; } = null!;
     public string ScenarioName { get; private set; }
     public string Description { get; private set; }
     public string TargetEndpoint { get; private set; }
@@ -12,16 +14,14 @@ public class SimulationScenario : BaseEntity
 
     private SimulationScenario() { }
 
-    public SimulationScenario(string scenarioName, string description, string targetEndpoint, string payloadTemplate)
+    public SimulationScenario(Guid tenantId, string scenarioName, string description, string targetEndpoint, string payloadTemplate)
     {
-        ScenarioName = !string.IsNullOrWhiteSpace(scenarioName) ? scenarioName : throw new ArgumentException("Scenarionavn skal angives", nameof(scenarioName));
+        TenantId = tenantId != Guid.Empty ? tenantId : throw new ArgumentException("Invalid tenant ID.", nameof(tenantId));
+        ScenarioName = !string.IsNullOrWhiteSpace(scenarioName) ? scenarioName : throw new ArgumentException("Scenario name is required.", nameof(scenarioName));
         Description = description ?? string.Empty;
-        TargetEndpoint = !string.IsNullOrWhiteSpace(targetEndpoint) ? targetEndpoint : throw new ArgumentException("Mål-endpoint skal angives", nameof(targetEndpoint));
+        TargetEndpoint = !string.IsNullOrWhiteSpace(targetEndpoint) ? targetEndpoint : throw new ArgumentException("Target endpoint is required.", nameof(targetEndpoint));
         PayloadTemplate = payloadTemplate ?? string.Empty;
     }
 
-    public void MarkAsExecuted()
-    {
-        LastExecutedAt = DateTime.UtcNow;
-    }
+    public void MarkAsExecuted() => LastExecutedAt = DateTime.UtcNow;
 }

@@ -1,0 +1,45 @@
+@page "/"
+@rendermode InteractiveServer
+@inject UI.Services.TalonApiClient Api
+@inject NavigationManager Navigation
+<h1>TalonSecurity</h1>
+@if (loading) { <p>Loading tenants...</p> }
+else if (!Api.IsLoggedIn) { <a class="btn btn-primary" href="/login">Log in</a> }
+else if (tenants is null) { <div class="alert alert-danger">Unable to load your connected tenants.</div> }
+else
+{
+    <h2>Connected tenants</h2>
+    <div class="list-group">
+        @foreach (var tenant in tenants)
+        {
+            <button class="list-group-item list-group-item-action" @onclick="() => Switch(tenant.TenantName)">
+                @tenant.TenantName <span class="badge bg-secondary">@tenant.Role</span>
+                @if (tenant.TenantName == Api.CurrentTenantName) { <span class="badge bg-success">Current</span> }
+            </button>
+        }
+    </div>
+    @if (Api.CurrentTenantRole is "Admin" or "PlatformAdmin")
+    {
+        <a class="btn btn-outline-primary mt-3" href="/admin/members">Manage tenant members</a>
+    }
+}
+@code {
+    private IReadOnlyList<UI.Services.TalonApiClient.AvailableTenant>? tenants;
+    private bool loading = true;
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (!first) return;
+        await Api.RestoreAuthAsync();
+        if (Api.IsLoggedIn) tenants = await Api.GetConnectedTenantsAsync();
+        loading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+    private async Task Switch(string name)
+    {
+        if (await Api.SwitchTenantAsync(name) is not null)
+        {
+            tenants = await Api.GetConnectedTenantsAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+}

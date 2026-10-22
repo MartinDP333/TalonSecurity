@@ -1,11 +1,9 @@
-﻿ using System;
-using System.Collections.Generic;
-using System.Text;
+using System;
 
-namespace Application.Interfaces
+namespace Application.Interfaces;
+
+public interface ICurrentTenantService
 {
-    public interface ICurrentTenantService
-    {
-        Guid? TenantId { get; }
-    }
+    Guid? TenantId { get; }
+    void SetTenant(Guid tenantId);
 }

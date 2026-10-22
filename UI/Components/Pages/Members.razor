@@ -1,0 +1,92 @@
+@page "/admin/members"
+@rendermode InteractiveServer
+@inject UI.Services.TalonApiClient Api
+@inject NavigationManager Navigation
+
+<h1>Tenant membership management</h1>
+@if (!Api.IsLoggedIn) { <p>Log in first.</p> }
+else if (loading) { <p>Loading memberships...</p> }
+else if (!canManage) { <div class="alert alert-warning">Your active tenant role is not Admin.</div> }
+else
+{
+    @if (message is not null) { <div class="alert alert-info">@message</div> }
+    <p>Tenant: <strong>@Api.CurrentTenantName</strong></p>
+    <div class="card card-body mb-4">
+        <h2 class="h5">Add an existing account</h2>
+        <EditForm Model="form" OnValidSubmit="AddAsync">
+            <div class="row g-2">
+                <div class="col"><InputText class="form-control" placeholder="Username" @bind-Value="form.UserName" /></div>
+                <div class="col"><InputSelect class="form-select" @bind-Value="form.Role">
+                    @foreach (var role in roles) { <option value="@role">@role</option> }
+                </InputSelect></div>
+                <div class="col-auto"><button class="btn btn-primary" type="submit">Add member</button></div>
+            </div>
+        </EditForm>
+    </div>
+    <table class="table table-striped">
+        <thead><tr><th>Username</th><th>Role</th><th>Active</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var member in members)
+        {
+            <tr>
+                <td>@member.UserName</td><td>@member.Role</td><td>@member.IsActive</td>
+                <td>
+                    @if (member.IsActive)
+                    {
+                        <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveAsync(member.UserName)">Deactivate</button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-sm btn-outline-success" @onclick="() => ActivateAsync(member.UserName)">Activate</button>
+                    }
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code {
+    private bool loading = true;
+    private bool canManage;
+    private string? message;
+    private IReadOnlyList<string> roles = Array.Empty<string>();
+    private IReadOnlyList<UI.Services.TalonApiClient.MemberView> members = Array.Empty<UI.Services.TalonApiClient.MemberView>();
+    private MemberForm form = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Api.RestoreAuthAsync();
+        canManage = Api.CurrentTenantRole is "Admin" or "PlatformAdmin";
+        if (!Api.IsLoggedIn) { Navigation.NavigateTo("/login"); return; }
+        if (canManage)
+        {
+            roles = await Api.GetTenantRolesAsync() ?? new[] { "Viewer", "Analyst", "Admin" };
+            members = await Api.GetMembershipsAsync() ?? Array.Empty<UI.Services.TalonApiClient.MemberView>();
+        }
+        loading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task AddAsync()
+    {
+        message = await Api.AddMembershipAsync(form.UserName, form.Role) ? "Membership added." : "Could not add account. Check that it exists and is not already a member.";
+        members = await Api.GetMembershipsAsync() ?? members;
+        form = new();
+    }
+
+    private async Task RemoveAsync(string userName)
+    {
+        message = await Api.RemoveMembershipAsync(userName) ? "Membership deactivated." : "Could not deactivate membership.";
+        members = await Api.GetMembershipsAsync() ?? members;
+    }
+
+    private async Task ActivateAsync(string userName)
+    {
+        message = await Api.ActivateMembershipAsync(userName) ? "Membership reactivated." : "Could not reactivate membership.";
+        members = await Api.GetMembershipsAsync() ?? members;
+    }
+
+    private sealed class MemberForm { public string UserName { get; set; } = string.Empty; public string Role { get; set; } = "Viewer"; }
+}

@@ -1,0 +1,105 @@
+@page "/platform-admin"
+@rendermode InteractiveServer
+@inject UI.Services.TalonApiClient Api
+@inject NavigationManager Navigation
+
+<h1>Platform administration</h1>
+@if (busy) { <p>Loading...</p> }
+else if (!Api.IsLoggedIn) { <p>Log in first.</p> }
+else if (!Api.IsPlatformAdmin) { <div class="alert alert-danger">PlatformAdmin access is required.</div> }
+else
+{
+    @if (message is not null) { <div class="alert alert-info">@message</div> }
+    <div class="row g-4">
+        <section class="col-lg-4">
+            <h2 class="h4">Create user</h2>
+            <EditForm Model="newUser" OnValidSubmit="CreateUser">
+                <div class="mb-2"><label>Username</label><InputText class="form-control" @bind-Value="newUser.UserName" /></div>
+                <div class="mb-2"><label>Password</label><InputText type="password" class="form-control" @bind-Value="newUser.Password" /></div>
+                <button class="btn btn-primary">Create user</button>
+            </EditForm>
+            <h2 class="h5 mt-4">Existing users</h2>
+            <select class="form-select" @bind="selectedUser">
+                <option value="">Select user</option>
+                @foreach (var u in users) { <option value="@u.UserName">@u.UserName</option> }
+            </select>
+        </section>
+        <section class="col-lg-4">
+            <h2 class="h4">Create tenant</h2>
+            <EditForm Model="newTenant" OnValidSubmit="CreateTenant">
+                <div class="mb-2"><label>Tenant name</label><InputText class="form-control" @bind-Value="newTenant.Name" /></div>
+                <div class="mb-2"><label>Initial tenant admin</label><InputSelect class="form-select" @bind-Value="newTenant.OwnerUserName"><option value="">Select user</option>@foreach (var u in users) { <option value="@u.UserName">@u.UserName</option> }</InputSelect></div>
+                <button class="btn btn-primary">Create tenant</button>
+            </EditForm>
+            <h2 class="h5 mt-4">Add user to tenant</h2>
+            <EditForm Model="addMember" OnValidSubmit="AddMembership">
+                <div class="mb-2"><label>Tenant</label><InputSelect class="form-select" @bind-Value="addMember.TenantId"><option value="">Select tenant</option>@foreach (var t in tenants) { <option value="@t.Id">@t.Name</option> }</InputSelect></div>
+                <div class="mb-2"><label>User</label><InputSelect class="form-select" @bind-Value="addMember.UserName"><option value="">Select user</option>@foreach (var u in users) { <option value="@u.UserName">@u.UserName</option> }</InputSelect></div>
+                <div class="mb-2"><label>Role</label><InputSelect class="form-select" @bind-Value="addMember.Role">@foreach (var r in roles) { <option value="@r">@r</option> }</InputSelect></div>
+                <button class="btn btn-primary">Add membership</button>
+            </EditForm>
+        </section>
+        <section class="col-lg-4">
+            <h2 class="h4">Existing memberships</h2>
+            <div class="mb-2"><label>Filter tenant</label><InputSelect class="form-select" @bind-Value="filterTenant"><option value="">All tenants</option>@foreach (var t in tenants) { <option value="@t.Name">@t.Name</option> }</InputSelect></div>
+            <table class="table table-sm"><thead><tr><th>Tenant</th><th>User</th><th>Role</th></tr></thead><tbody>
+            @foreach (var m in FilteredMemberships)
+            {
+                <tr>
+                    <td>@m.TenantName</td>
+                    <td>@m.UserName</td>
+                    <td>
+                        <select class="form-select form-select-sm" value="@m.Role" @onchange="e => ChangeRoleFromEvent(m, e)">
+                            @foreach (var r in roles) { <option value="@r">@r</option> }
+                        </select>
+                    </td>
+                </tr>
+            }
+            </tbody></table>
+        </section>
+    </div>
+}
+
+@code {
+    private bool busy = true;
+    private string? message;
+    private string selectedUser = "";
+    private string filterTenant = "";
+    private IReadOnlyList<UI.Services.TalonApiClient.AdminUser> users = Array.Empty<UI.Services.TalonApiClient.AdminUser>();
+    private IReadOnlyList<UI.Services.TalonApiClient.AdminTenant> tenants = Array.Empty<UI.Services.TalonApiClient.AdminTenant>();
+    private IReadOnlyList<UI.Services.TalonApiClient.AdminMembership> memberships = Array.Empty<UI.Services.TalonApiClient.AdminMembership>();
+    private IReadOnlyList<string> roles = new[] { "Viewer", "Analyst", "Admin" };
+    private UserForm newUser = new();
+    private TenantForm newTenant = new();
+    private MembershipForm addMember = new();
+    private IEnumerable<UI.Services.TalonApiClient.AdminMembership> FilteredMemberships => string.IsNullOrEmpty(filterTenant) ? memberships : memberships.Where(x => x.TenantName == filterTenant);
+
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (!first) return;
+        await Api.RestoreAuthAsync();
+        if (!Api.IsLoggedIn) { Navigation.NavigateTo("/login"); return; }
+        if (!Api.IsPlatformAdmin) { busy = false; await InvokeAsync(StateHasChanged); return; }
+        await Refresh();
+        busy = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task Refresh()
+    {
+        users = await Api.GetAdminUsersAsync() ?? Array.Empty<UI.Services.TalonApiClient.AdminUser>();
+        tenants = await Api.GetAdminTenantsAsync() ?? Array.Empty<UI.Services.TalonApiClient.AdminTenant>();
+        memberships = await Api.GetAdminMembershipsAsync() ?? Array.Empty<UI.Services.TalonApiClient.AdminMembership>();
+        roles = await Api.GetTenantRolesAsync() ?? roles;
+    }
+    private async Task CreateUser() { message = await Api.CreateAdminUserAsync(newUser.UserName, newUser.Password) ? "User created." : "Could not create user; username may exist already."; newUser = new(); await Refresh(); }
+    private async Task CreateTenant() { message = await Api.CreateAdminTenantAsync(newTenant.Name, newTenant.OwnerUserName) ? "Tenant created and owner linked as Admin." : "Could not create tenant; check the selected owner and tenant name."; newTenant = new(); await Refresh(); }
+    private async Task AddMembership() { message = await Api.AddAdminMembershipAsync(addMember.TenantId, addMember.UserName, addMember.Role) ? "Membership added." : "Could not add membership; it may already exist."; addMember = new(); await Refresh(); }
+    private Task ChangeRoleFromEvent(UI.Services.TalonApiClient.AdminMembership member, ChangeEventArgs args)
+        => ChangeRole(member, args.Value?.ToString() ?? "Viewer");
+
+    private async Task ChangeRole(UI.Services.TalonApiClient.AdminMembership m,string role) { message = await Api.UpdateAdminMembershipAsync(m.TenantId,m.UserName,role) ? "Membership role updated." : "Role update failed."; await Refresh(); }
+    private sealed class UserForm { public string UserName {get;set;}=""; public string Password {get;set;}=""; }
+    private sealed class TenantForm { public string Name {get;set;}=""; public string OwnerUserName {get;set;}=""; }
+    private sealed class MembershipForm { public Guid TenantId {get;set;} public string UserName {get;set;}=""; public string Role {get;set;}="Viewer"; }
+}

@@ -9,5 +9,6 @@ public record WafThreatEvent
     public required string RuleId { get; init; }
     public required string RuleMessage { get; init; }
     public required string RawPayload { get; init; }
+    public required string TenantName { get; init; }
     public required DateTime Timestamp { get; init; }
 }

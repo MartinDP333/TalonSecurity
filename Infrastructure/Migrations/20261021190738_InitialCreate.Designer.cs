@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(SecurityDbContext))]
-    [Migration("20261015210920_SyncModelWithDatabase")]
-    partial class SyncModelWithDatabase
+    [Migration("20261021190738_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -189,7 +189,12 @@ namespace Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("SimulationScenarios");
                 });
@@ -210,6 +215,36 @@ namespace Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Tenants");
+                });
+
+            modelBuilder.Entity("Domain.Entities.TenantMembership", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UserAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserAccountId");
+
+                    b.HasIndex("TenantId", "UserAccountId")
+                        .IsUnique();
+
+                    b.ToTable("TenantMemberships");
                 });
 
             modelBuilder.Entity("Domain.Entities.ThreatLog", b =>
@@ -265,6 +300,36 @@ namespace Infrastructure.Migrations
                     b.HasIndex("TenantId", "SourceIp");
 
                     b.ToTable("ThreatLogs");
+                });
+
+            modelBuilder.Entity("Domain.Entities.UserAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsPlatformAdmin")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("UserName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserName")
+                        .IsUnique();
+
+                    b.ToTable("UserAccounts");
                 });
 
             modelBuilder.Entity("Domain.Entities.VulnerabilityReport", b =>
@@ -362,6 +427,36 @@ namespace Infrastructure.Migrations
                     b.Navigation("ThreatLog");
                 });
 
+            modelBuilder.Entity("Domain.Entities.SimulationScenario", b =>
+                {
+                    b.HasOne("Domain.Entities.Tenant", "Tenant")
+                        .WithMany("SimulationScenarios")
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("Domain.Entities.TenantMembership", b =>
+                {
+                    b.HasOne("Domain.Entities.Tenant", "Tenant")
+                        .WithMany("Memberships")
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Domain.Entities.UserAccount", "UserAccount")
+                        .WithMany("Memberships")
+                        .HasForeignKey("UserAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
+
+                    b.Navigation("UserAccount");
+                });
+
             modelBuilder.Entity("Domain.Entities.ThreatLog", b =>
                 {
                     b.HasOne("Domain.Entities.Tenant", "Tenant")
@@ -392,7 +487,11 @@ namespace Infrastructure.Migrations
 
                     b.Navigation("IpReputations");
 
+                    b.Navigation("Memberships");
+
                     b.Navigation("Notifications");
+
+                    b.Navigation("SimulationScenarios");
 
                     b.Navigation("ThreatLogs");
 
@@ -404,6 +503,11 @@ namespace Infrastructure.Migrations
                     b.Navigation("Notification");
 
                     b.Navigation("ResponseAction");
+                });
+
+            modelBuilder.Entity("Domain.Entities.UserAccount", b =>
+                {
+                    b.Navigation("Memberships");
                 });
 #pragma warning restore 612, 618
         }

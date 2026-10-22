@@ -6,27 +6,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class AddBlockedUntilToIpReputation : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.CreateTable(
-                name: "SimulationScenarios",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    ScenarioName = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Description = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    TargetEndpoint = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    PayloadTemplate = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    LastExecutedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_SimulationScenarios", x => x.Id);
-                });
-
             migrationBuilder.CreateTable(
                 name: "Tenants",
                 columns: table => new
@@ -38,6 +22,21 @@ namespace Infrastructure.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Tenants", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "UserAccounts",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    UserName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    PasswordHash = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    IsPlatformAdmin = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UserAccounts", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -67,7 +66,7 @@ namespace Infrastructure.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     IpAddress = table.Column<string>(type: "nvarchar(45)", maxLength: 45, nullable: false),
                     RiskScore = table.Column<int>(type: "int", nullable: false),
                     TotalIncidents = table.Column<int>(type: "int", nullable: false),
@@ -80,6 +79,29 @@ namespace Infrastructure.Migrations
                     table.PrimaryKey("PK_IpReputations", x => x.Id);
                     table.ForeignKey(
                         name: "FK_IpReputations_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "SimulationScenarios",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    ScenarioName = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    TargetEndpoint = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    PayloadTemplate = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    LastExecutedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_SimulationScenarios", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_SimulationScenarios_Tenants_TenantId",
                         column: x => x.TenantId,
                         principalTable: "Tenants",
                         principalColumn: "Id",
@@ -132,6 +154,33 @@ namespace Infrastructure.Migrations
                         name: "FK_VulnerabilityReports_Tenants_TenantId",
                         column: x => x.TenantId,
                         principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "TenantMemberships",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    UserAccountId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Role = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TenantMemberships", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_TenantMemberships_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_TenantMemberships_UserAccounts_UserAccountId",
+                        column: x => x.UserAccountId,
+                        principalTable: "UserAccounts",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -211,7 +260,8 @@ namespace Infrastructure.Migrations
                 name: "IX_IpReputations_TenantId_IpAddress",
                 table: "IpReputations",
                 columns: new[] { "TenantId", "IpAddress" },
-                unique: true);
+                unique: true,
+                filter: "[TenantId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Notifications_TenantId",
@@ -226,6 +276,22 @@ namespace Infrastructure.Migrations
                 filter: "[ThreatLogId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
+                name: "IX_SimulationScenarios_TenantId",
+                table: "SimulationScenarios",
+                column: "TenantId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TenantMemberships_TenantId_UserAccountId",
+                table: "TenantMemberships",
+                columns: new[] { "TenantId", "UserAccountId" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TenantMemberships_UserAccountId",
+                table: "TenantMemberships",
+                column: "UserAccountId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_ThreatLogs_TenantId_LastSeenAt",
                 table: "ThreatLogs",
                 columns: new[] { "TenantId", "LastSeenAt" });
@@ -234,6 +300,12 @@ namespace Infrastructure.Migrations
                 name: "IX_ThreatLogs_TenantId_SourceIp",
                 table: "ThreatLogs",
                 columns: new[] { "TenantId", "SourceIp" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_UserAccounts_UserName",
+                table: "UserAccounts",
+                column: "UserName",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_VulnerabilityReports_TenantId",
@@ -260,10 +332,16 @@ namespace Infrastructure.Migrations
                 name: "SimulationScenarios");
 
             migrationBuilder.DropTable(
+                name: "TenantMemberships");
+
+            migrationBuilder.DropTable(
                 name: "VulnerabilityReports");
 
             migrationBuilder.DropTable(
                 name: "ThreatLogs");
+
+            migrationBuilder.DropTable(
+                name: "UserAccounts");
 
             migrationBuilder.DropTable(
                 name: "Tenants");

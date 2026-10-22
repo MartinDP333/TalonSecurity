@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: talon-gateway-config
+data:
+  alpha.talon.test: "Talon Security Alpha|http://webshop-origin.default.svc.cluster.local"
+  beta.talon.test: "Talon Security Beta|http://museum-origin.default.svc.cluster.local"

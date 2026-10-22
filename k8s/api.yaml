@@ -19,8 +19,11 @@ spec:
         ports:
         - containerPort: 8080
         env:
-        - name: ASPNETCORE_ENVIRONMENT
-          value: "Development"
+        - name: JWT_KEY
+          valueFrom:
+            secretKeyRef:
+              name: talon-secrets
+              key: JWT_KEY
         - name: MSSQL_SA_PASSWORD
           valueFrom:
             secretKeyRef:

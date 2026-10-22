@@ -51,6 +51,10 @@ public sealed class WafAuditParser : IWafAuditParser
 
             var uniqueId = transaction.GetProperty("unique_id").GetString() ?? Guid.NewGuid().ToString("N");
             var ip = transaction.GetProperty("client_ip").GetString() ?? "unknown";
+            var hostName = request.TryGetProperty("headers", out var headers) && headers.TryGetProperty("Host", out var host)
+                ? host.GetString() ?? ""
+                : transaction.TryGetProperty("hostname", out var transactionHost) ? transactionHost.GetString() ?? "" : "";
+            var tenantName = Environment.GetEnvironmentVariable($"TENANT_HOST_{hostName.Replace('.', '_').ToUpperInvariant()}") ?? ResolveTenantName(hostName);
             var path = request.GetProperty("uri").GetString() ?? "/";
             var raw = root.GetRawText();
             var message = root.TryGetProperty("messages", out var messages) && messages.GetArrayLength() > 0
@@ -69,10 +73,22 @@ public sealed class WafAuditParser : IWafAuditParser
                 RuleId = ruleId,
                 RuleMessage = message,
                 RawPayload = raw,
+                TenantName = tenantName,
                 Timestamp = DateTime.UtcNow
             };
         }
         catch (JsonException) { return null; }
+    }
+
+    private static string ResolveTenantName(string hostName)
+    {
+        var host = hostName.Split(':')[0].Trim().ToLowerInvariant();
+        return host switch
+        {
+            "alpha.talon.test" => "Talon Security Alpha",
+            "beta.talon.test" => "Talon Security Beta",
+            _ => ""
+        };
     }
 
     private static string Categorize(string ruleId, string message)
