@@ -1,0 +1,98 @@
+@page "/webshop"
+@rendermode InteractiveServer
+@inject UI.Services.TalonApiClient Api
+@inject NavigationManager Navigation
+
+<h1>Webshop</h1>
+
+@if (!Api.IsLoggedIn)
+{
+    <p>Log in to use the webshop demo.</p>
+    <a class="btn btn-primary" href="/login">Log in</a>
+}
+else if (loading)
+{
+    <p>Loading webshop...</p>
+}
+else
+{
+    <div class="row g-3">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h2 class="h5">Add item to cart</h2>
+                    <div class="mb-3">
+                        <label class="form-label">Item name</label>
+                        <InputText class="form-control" @bind-Value="itemName" />
+                    </div>
+                    <button class="btn btn-primary" @onclick="AddItemAsync">Add to cart</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h2 class="h5">Current session</h2>
+                    <p class="mb-1"><strong>Tenant:</strong> @Api.CurrentTenantName</p>
+                    <p class="mb-1"><strong>Role:</strong> @Api.CurrentTenantRole</p>
+                    <p class="mb-0"><strong>Tenant ID:</strong> @Api.CurrentTenantId</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(resultText))
+    {
+        <div class="alert alert-success mt-3">@resultText</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="alert alert-danger mt-3">@error</div>
+    }
+}
+
+@code {
+    private bool loading = true;
+    private string itemName = "Laptop stand";
+    private string? resultText;
+    private string? error;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Api.RestoreAuthAsync();
+        if (!Api.IsLoggedIn)
+        {
+            loading = false;
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        loading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task AddItemAsync()
+    {
+        resultText = null;
+        error = null;
+
+        try
+        {
+            var result = await Api.AddCartItemAsync(itemName);
+            if (result is null)
+            {
+                error = "Could not add the item to the cart.";
+                return;
+            }
+
+            resultText = $"{result.Message} | IP: {result.Ip} | Tenant: {result.TenantId}";
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+}

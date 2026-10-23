@@ -1,0 +1,134 @@
+@page "/banking"
+@rendermode InteractiveServer
+@inject UI.Services.TalonApiClient Api
+@inject NavigationManager Navigation
+
+<h1>Banking</h1>
+
+@if (!Api.IsLoggedIn)
+{
+    <p>Log in to access the banking demo.</p>
+    <a class="btn btn-primary" href="/login">Log in</a>
+}
+else if (loading)
+{
+    <p>Loading banking dashboard...</p>
+}
+else
+{
+    <div class="row g-3">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h2 class="h5">Account overview</h2>
+                    <p class="mb-1"><strong>Account holder:</strong> @dashboard?.AccountHolder</p>
+                    <p class="mb-1"><strong>Account number:</strong> @dashboard?.AccountNumber</p>
+                    <p class="mb-1"><strong>Balance:</strong> @dashboard?.AvailableBalance.ToString("C")</p>
+                    <p class="mb-0"><strong>Source IP:</strong> @dashboard?.SourceIp</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h2 class="h5">Transfer money</h2>
+                    <div class="mb-3">
+                        <label class="form-label">From account</label>
+                        <InputText class="form-control" @bind-Value="fromAccount" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">To account</label>
+                        <InputText class="form-control" @bind-Value="toAccount" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Amount</label>
+                        <InputNumber class="form-control" @bind-Value="amount" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <InputText class="form-control" @bind-Value="description" />
+                    </div>
+                    <button class="btn btn-primary" @onclick="TransferAsync">Transfer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(resultText))
+    {
+        <div class="alert alert-success mt-3">@resultText</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="alert alert-danger mt-3">@error</div>
+    }
+}
+
+@code {
+    private bool loading = true;
+    private UI.Services.TalonApiClient.BankingDashboard? dashboard;
+    private string fromAccount = "DK-18475020";
+    private string toAccount = "DK-20034190";
+    private decimal amount = 250m;
+    private string description = "Mortgage payment";
+    private string? resultText;
+    private string? error;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Api.RestoreAuthAsync();
+        if (!Api.IsLoggedIn)
+        {
+            loading = false;
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        error = null;
+
+        try
+        {
+            dashboard = await Api.GetBankingDashboardAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            dashboard = null;
+        }
+
+        loading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task TransferAsync()
+    {
+        resultText = null;
+        error = null;
+
+        try
+        {
+            var result = await Api.TransferBankAsync(fromAccount, toAccount, amount, description);
+            if (result is null)
+            {
+                error = "Transfer request failed.";
+                return;
+            }
+
+            resultText = $"{result.Message} | Status: {result.Status} | IP: {result.SourceIp}";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+}

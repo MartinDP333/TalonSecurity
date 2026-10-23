@@ -1,4 +1,4 @@
-@inherits LayoutComponentBase
+﻿@inherits LayoutComponentBase
 @inject UI.Services.TalonApiClient Api
 @inject NavigationManager Navigation
 
@@ -10,6 +10,8 @@
             {
                 <span class="text-light">@Api.CurrentTenantName</span>
                 <a class="nav-link text-light" href="/" @onclick:preventDefault @onclick="GoHome">Tenants</a>
+                <a class="nav-link text-light" href="/webshop">Webshop</a>
+                <a class="nav-link text-light" href="/banking">Banking</a>
                 <a class="nav-link text-light" href="/threatlogs">Threat logs</a>
                 @if (Api.IsPlatformAdmin)
                 {
