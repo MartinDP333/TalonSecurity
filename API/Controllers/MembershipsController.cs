@@ -1,11 +1,7 @@
-using Domain.Enums;
 using System.Security.Claims;
 using Application.Interfaces;
-using Domain.Entities;
-using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace API.Controllers;
 
@@ -14,17 +10,17 @@ namespace API.Controllers;
 [Route("api/memberships")]
 public sealed class MembershipsController : ControllerBase
 {
-    private readonly SecurityDbContext _db;
+    private readonly IMembershipService _memberships;
     private readonly ICurrentTenantService _tenant;
 
-    public MembershipsController(SecurityDbContext db, ICurrentTenantService tenant) => (_db, _tenant) = (db, tenant);
+    public MembershipsController(IMembershipService memberships, ICurrentTenantService tenant)
+        => (_memberships, _tenant) = (memberships, tenant);
 
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
         if (!User.IsInRole("Admin") && !User.IsInRole("PlatformAdmin")) return Forbid();
-        var items = await _db.TenantMemberships.AsNoTracking()
-            .Select(x => new { x.UserAccount.UserName, x.Role, x.IsActive, x.TenantId }).ToListAsync(cancellationToken);
+        var items = await _memberships.ListAsync(cancellationToken);
         return Ok(items);
     }
 
@@ -34,15 +30,16 @@ public sealed class MembershipsController : ControllerBase
         if (!User.IsInRole("Admin") && !User.IsInRole("PlatformAdmin")) return Forbid();
         if (!_tenant.TenantId.HasValue) return Forbid();
 
-        var user = await _db.UserAccounts.IgnoreQueryFilters().SingleOrDefaultAsync(x => x.UserName == request.UserName, cancellationToken);
-        if (user is null) return NotFound("Create the user account through the platform-admin endpoint first.");
-        if (await _db.TenantMemberships.IgnoreQueryFilters().AnyAsync(x => x.TenantId == _tenant.TenantId.Value && x.UserAccountId == user.Id, cancellationToken))
-            return Conflict("User is already a member of this tenant.");
+        var membership = await _memberships.InviteAsync(_tenant.TenantId.Value, request.UserName, request.Role, cancellationToken);
+        if (membership is null)
+        {
+            if (!Enum.TryParse<Domain.Enums.TenantRole>(request.Role, true, out _))
+                return BadRequest(new { error = "Invalid tenant role.", allowedRoles = Enum.GetNames<Domain.Enums.TenantRole>() });
 
-        if (!Enum.TryParse<TenantRole>(request.Role, true, out var role)) return BadRequest(new { error = "Invalid tenant role.", allowedRoles = Enum.GetNames<TenantRole>() });
-        _db.TenantMemberships.Add(new TenantMembership(_tenant.TenantId.Value, user.Id, role.ToString()));
-        await _db.SaveChangesAsync(cancellationToken);
-        return Created("api/memberships", new { userName = user.UserName, tenantId = _tenant.TenantId, request.Role });
+            return Conflict("User is already a member of this tenant or the user account does not exist.");
+        }
+
+        return Created("api/memberships", new { userName = membership.UserName, tenantId = membership.TenantId, role = membership.Role });
     }
 
     [HttpDelete("{userName}")]
@@ -50,11 +47,9 @@ public sealed class MembershipsController : ControllerBase
     {
         if (!User.IsInRole("Admin") && !User.IsInRole("PlatformAdmin")) return Forbid();
         if (!_tenant.TenantId.HasValue) return Forbid();
-        var membership = await _db.TenantMemberships.IgnoreQueryFilters().Include(x => x.UserAccount).SingleOrDefaultAsync(x => x.TenantId == _tenant.TenantId.Value && x.UserAccount.UserName == userName, cancellationToken);
-        if (membership is null) return NotFound();
-        membership.Deactivate();
-        await _db.SaveChangesAsync(cancellationToken);
-        return NoContent();
+
+        var removed = await _memberships.RemoveAsync(_tenant.TenantId.Value, userName, cancellationToken);
+        return removed ? NoContent() : NotFound();
     }
 
     [HttpPost("{userName}/activate")]
@@ -62,16 +57,14 @@ public sealed class MembershipsController : ControllerBase
     {
         if (!User.IsInRole("Admin") && !User.IsInRole("PlatformAdmin")) return Forbid();
         if (!_tenant.TenantId.HasValue) return Forbid();
-        var membership = await _db.TenantMemberships.IgnoreQueryFilters().Include(x => x.UserAccount)
-            .SingleOrDefaultAsync(x => x.TenantId == _tenant.TenantId.Value && x.UserAccount.UserName == userName, cancellationToken);
-        if (membership is null) return NotFound();
-        membership.Activate();
-        await _db.SaveChangesAsync(cancellationToken);
-        return NoContent();
+
+        var activated = await _memberships.ActivateAsync(_tenant.TenantId.Value, userName, cancellationToken);
+        return activated ? NoContent() : NotFound();
     }
 
     [HttpGet("roles")]
-    public IActionResult Roles() => Ok(Enum.GetNames<TenantRole>());
+    public async Task<IActionResult> Roles(CancellationToken cancellationToken)
+        => Ok(await _memberships.GetRolesAsync());
 
     public sealed record InviteRequest(string UserName, string Role = "Viewer");
 }

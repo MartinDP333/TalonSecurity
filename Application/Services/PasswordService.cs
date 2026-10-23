@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 
-namespace API.Services;
+namespace Application.Services;
 
 public static class PasswordService
 {
@@ -25,6 +25,9 @@ public static class PasswordService
             var actual = Rfc2898DeriveBytes.Pbkdf2(password, salt, 120_000, HashAlgorithmName.SHA256, expected.Length);
             return CryptographicOperations.FixedTimeEquals(actual, expected);
         }
-        catch (FormatException) { return false; }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 }

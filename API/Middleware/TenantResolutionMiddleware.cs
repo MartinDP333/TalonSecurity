@@ -1,6 +1,7 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Application.Interfaces;
 using Infrastructure.Persistence;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 
 namespace API.Middleware;
@@ -33,6 +34,7 @@ public sealed class TenantResolutionMiddleware
             await context.Response.WriteAsync("Development tenant routing options must not be enabled outside Development.");
             return;
         }
+
         Guid tenantId;
         if (!string.IsNullOrWhiteSpace(claimValue))
         {
@@ -48,17 +50,12 @@ public sealed class TenantResolutionMiddleware
             Guid? protectedSiteTenantId = null;
             if (routeByProtectedSite)
             {
-                var lookupOptions = context.RequestServices.GetRequiredService<DbContextOptions<SecurityDbContext>>();
-                await using var lookupDb = new SecurityDbContext(lookupOptions);
-                protectedSiteTenantId = await lookupDb.ProtectedSites.IgnoreQueryFilters().AsNoTracking()
-                    .Where(x => x.IsEnabled && x.Hostname == hostname)
-                    .Select(x => (Guid?)x.TenantId)
-                    .SingleOrDefaultAsync();
+                var protectedSites = context.RequestServices.GetRequiredService<IProtectedSiteService>();
+                protectedSiteTenantId = await protectedSites.ResolveTenantIdByHostnameAsync(hostname);
             }
 
             if (protectedSiteTenantId.HasValue)
             {
-                // Registered host mapping is authoritative; do not allow a caller header to cross tenants.
                 tenantId = protectedSiteTenantId.Value;
             }
             else if (allowHeaderForTesting && Guid.TryParse(headerValue, out var headerTenantId))

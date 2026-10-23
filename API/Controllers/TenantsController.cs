@@ -1,9 +1,7 @@
 using System.Security.Claims;
 using Application.Interfaces;
-using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace API.Controllers;
 
@@ -12,10 +10,11 @@ namespace API.Controllers;
 [Route("api/tenants")]
 public sealed class TenantsController : ControllerBase
 {
-    private readonly SecurityDbContext _db;
     private readonly ICurrentTenantService _tenant;
+    private readonly ITenantCatalogService _tenantCatalog;
 
-    public TenantsController(SecurityDbContext db, ICurrentTenantService tenant) => (_db, _tenant) = (db, tenant);
+    public TenantsController(ICurrentTenantService tenant, ITenantCatalogService tenantCatalog)
+        => (_tenant, _tenantCatalog) = (tenant, tenantCatalog);
 
     [HttpGet]
     public async Task<IActionResult> GetTenants(CancellationToken cancellationToken)
@@ -23,10 +22,7 @@ public sealed class TenantsController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
         if (string.IsNullOrWhiteSpace(userId)) return Unauthorized();
 
-        var tenants = await _db.TenantMemberships.IgnoreQueryFilters()
-            .Where(m => m.UserAccount.UserName == userId && m.IsActive)
-            .Select(m => new { m.TenantId, TenantName = m.Tenant.Name, m.Role })
-            .ToListAsync(cancellationToken);
+        var tenants = await _tenantCatalog.GetUserTenantsAsync(userId, cancellationToken);
         return Ok(tenants);
     }
 
@@ -34,8 +30,8 @@ public sealed class TenantsController : ControllerBase
     public async Task<IActionResult> GetCurrent(CancellationToken cancellationToken)
     {
         if (!_tenant.TenantId.HasValue) return Forbid();
-        var tenant = await _db.Tenants.IgnoreQueryFilters().Where(t => t.Id == _tenant.TenantId.Value)
-            .Select(t => new { t.Id, t.Name, t.CreatedAt }).SingleOrDefaultAsync(cancellationToken);
+
+        var tenant = await _tenantCatalog.GetCurrentTenantAsync(_tenant.TenantId.Value, cancellationToken);
         return tenant is null ? NotFound() : Ok(tenant);
     }
 }

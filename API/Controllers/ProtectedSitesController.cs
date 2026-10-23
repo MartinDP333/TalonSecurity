@@ -1,10 +1,6 @@
-using Application.Interfaces;
-using Domain.Entities;
-using Infrastructure.Persistence;
-using System.Security.Claims;
+﻿using Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace API.Controllers;
 
@@ -13,22 +9,20 @@ namespace API.Controllers;
 [Route("api/protected-sites")]
 public sealed class ProtectedSitesController : ControllerBase
 {
-    private readonly SecurityDbContext _db;
     private readonly ICurrentTenantService _tenant;
+    private readonly IProtectedSiteService _protectedSites;
 
-    public ProtectedSitesController(SecurityDbContext db, ICurrentTenantService tenant) => (_db, _tenant) = (db, tenant);
+    public ProtectedSitesController(ICurrentTenantService tenant, IProtectedSiteService protectedSites)
+        => (_tenant, _protectedSites) = (tenant, protectedSites);
 
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
         if (!_tenant.TenantId.HasValue) return Forbid();
         if (!User.IsInRole("Admin") && !User.IsInRole("PlatformAdmin")) return Forbid();
-        var tenantId = _tenant.TenantId.Value;
-        var sites = await _db.ProtectedSites.IgnoreQueryFilters().AsNoTracking()
-            .Where(x => x.TenantId == tenantId)
-            .Select(x => new { x.Id, x.TenantId, x.Hostname, x.OriginUrl, x.IsEnabled })
-            .ToListAsync(cancellationToken);
-        return Ok(sites);
+
+        var sites = await _protectedSites.ListForTenantAsync(_tenant.TenantId.Value, cancellationToken);
+        return Ok(sites.Select(x => new { x.Id, x.TenantId, x.Hostname, x.OriginUrl, x.IsEnabled }));
     }
 
     [HttpPost]
@@ -36,10 +30,12 @@ public sealed class ProtectedSitesController : ControllerBase
     {
         if (!_tenant.TenantId.HasValue) return Forbid();
         if (!User.IsInRole("Admin") && !User.IsInRole("PlatformAdmin")) return Forbid();
-        if (await _db.ProtectedSites.IgnoreQueryFilters().AnyAsync(x => x.Hostname == request.Hostname.Trim().ToLower(), cancellationToken)) return Conflict("Hostname is already registered.");
-        var site = new ProtectedSite(_tenant.TenantId.Value, request.Hostname, request.OriginUrl);
-        _db.ProtectedSites.Add(site);
-        await _db.SaveChangesAsync(cancellationToken);
+
+        var normalizedHostname = request.Hostname.Trim();
+        if (await _protectedSites.IsHostnameRegisteredAsync(normalizedHostname, cancellationToken))
+            return Conflict("Hostname is already registered.");
+
+        var site = await _protectedSites.AddAsync(_tenant.TenantId.Value, normalizedHostname, request.OriginUrl, cancellationToken);
         return Created("api/protected-sites", new { site.Id, site.Hostname, site.OriginUrl, site.IsEnabled });
     }
 
@@ -48,10 +44,11 @@ public sealed class ProtectedSitesController : ControllerBase
     {
         if (!_tenant.TenantId.HasValue) return Forbid();
         if (!User.IsInRole("Admin") && !User.IsInRole("PlatformAdmin")) return Forbid();
-        var site = await _db.ProtectedSites.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        var site = await _protectedSites.GetByIdAsync(id, cancellationToken);
         if (site is null) return NotFound();
-        site.Disable();
-        await _db.SaveChangesAsync(cancellationToken);
+
+        await _protectedSites.DisableAsync(id, cancellationToken);
         return NoContent();
     }
 

@@ -1,4 +1,4 @@
-using Application.Interfaces;
+﻿using Application.Interfaces;
 using Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -18,6 +18,12 @@ public static class DependencyInjection
 
         services.AddScoped<IIpReputationRepository, IpReputationRepository>();
         services.AddScoped<IThreatLogService, ThreatLogService>();
+        services.AddScoped<IAuthenticationService, AuthenticationService>();
+        services.AddScoped<IProtectedSiteService, ProtectedSiteService>();
+        services.AddScoped<IPlatformAdminService, TenantManagementService>();
+        services.AddScoped<ITenantCatalogService, TenantManagementService>();
+        services.AddScoped<IMembershipService, MembershipService>();
+        services.AddScoped<IThreatTelemetryService, ThreatTelemetryService>();
 
         return services;
     }
