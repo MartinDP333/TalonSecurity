@@ -21,37 +21,73 @@ public sealed class ThreatLogsController : ControllerBase
     public async Task<IActionResult> Get(CancellationToken cancellationToken)
     {
         if (!_tenant.TenantId.HasValue) return Forbid();
-        var logs = await _db.ThreatLogs.AsNoTracking().OrderByDescending(x => x.LastSeenAt)
-            .Select(x => new { x.Id, x.SourceIp, x.RequestPath, x.AttackType, x.Severity, x.HitCount, x.FirstSeenAt, x.LastSeenAt, x.CountryCode })
+        var tenantId = _tenant.TenantId.Value;
+
+        var logs = await _db.ThreatLogs.AsNoTracking()
+            .Where(x => x.TenantId == tenantId)
+            .OrderByDescending(x => x.LastSeenAt)
+            .Select(x => new { x.Id, x.SourceIp, x.RequestPath, x.AttackType, Severity = (int)x.Severity, x.HitCount, x.FirstSeenAt, x.LastSeenAt, x.CountryCode })
             .ToListAsync(cancellationToken);
         return Ok(logs);
+    }
+
+    [HttpGet("audit")]
+    public async Task<IActionResult> Audit([FromQuery] DateTime? since = null, CancellationToken cancellationToken = default)
+    {
+        if (!_tenant.TenantId.HasValue) return Forbid();
+        var tenantId = _tenant.TenantId.Value;
+        var entries = await _db.SecurityAuditEvents.AsNoTracking()
+            .Where(x => x.TenantId == tenantId && (!since.HasValue || x.OccurredAt >= since.Value))
+            .OrderByDescending(x => x.OccurredAt)
+            .Select(x => new { x.Id, x.EventType, x.Category, x.SourceIp, x.RequestPath, Severity = (int)x.Severity, x.OccurredAt, x.Details })
+            .ToListAsync(cancellationToken);
+        return Ok(entries);
     }
 
     [HttpGet("timeline")]
     public async Task<IActionResult> Timeline([FromQuery] string type = "all", [FromQuery] DateTime? since = null, CancellationToken cancellationToken = default)
     {
         if (!_tenant.TenantId.HasValue) return Forbid();
-        var items = new List<TimelineItem>();
+        var tenantId = _tenant.TenantId.Value;
+        var result = new List<TimelineItem>();
 
         if (type is "all" or "threat")
         {
             var threats = await _db.ThreatLogs.AsNoTracking()
-                .Where(x => !since.HasValue || x.LastSeenAt >= since.Value)
-                .Select(x => new { x.Id, x.SourceIp, x.RequestPath, x.AttackType, x.Severity, x.HitCount, x.FirstSeenAt, x.LastSeenAt })
+                .Where(x => x.TenantId == tenantId && (!since.HasValue || x.LastSeenAt >= since.Value))
+                .Select(x => new TimelineItem(
+                    x.Id,
+                    "ThreatLog",
+                    x.LastSeenAt,
+                    x.AttackType,
+                    x.SourceIp,
+                    x.RequestPath,
+                    (int)x.Severity,
+                    x.HitCount,
+                    null))
                 .ToListAsync(cancellationToken);
-            items.AddRange(threats.Select(x => new TimelineItem(x.Id, "ThreatLog", x.LastSeenAt, x.AttackType, x.SourceIp, x.RequestPath, (int)x.Severity, x.HitCount, null)));
+            result.AddRange(threats);
         }
 
         if (type is "all" or "audit")
         {
-            var audit = await _db.SecurityAuditEvents.AsNoTracking()
-                .Where(x => !since.HasValue || x.OccurredAt >= since.Value)
-                .Select(x => new { x.Id, x.EventType, x.Category, x.SourceIp, x.RequestPath, x.Severity, x.OccurredAt, x.Details })
+            var auditEvents = await _db.SecurityAuditEvents.AsNoTracking()
+                .Where(x => x.TenantId == tenantId && (!since.HasValue || x.OccurredAt >= since.Value))
+                .Select(x => new TimelineItem(
+                    x.Id,
+                    "SecurityAuditEvent",
+                    x.OccurredAt,
+                    x.EventType,
+                    x.SourceIp,
+                    x.RequestPath,
+                    (int)x.Severity,
+                    null,
+                    x.Details))
                 .ToListAsync(cancellationToken);
-            items.AddRange(audit.Select(x => new TimelineItem(x.Id, "SecurityAuditEvent", x.OccurredAt, x.EventType, x.SourceIp, x.RequestPath, x.Severity, null, x.Details)));
+            result.AddRange(auditEvents);
         }
 
-        return Ok(items.OrderByDescending(x => x.OccurredAt));
+        return Ok(result.OrderByDescending(x => x.OccurredAt));
     }
 
     public sealed record TimelineItem(Guid Id, string RecordType, DateTime OccurredAt, string EventType, string? SourceIp, string RequestPath, int Severity, int? HitCount, string? Details);

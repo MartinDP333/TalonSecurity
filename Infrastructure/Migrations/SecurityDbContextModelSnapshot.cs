@@ -365,9 +365,8 @@ namespace Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<string>("Severity")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<int>("Severity")
+                        .HasColumnType("int");
 
                     b.Property<string>("SourceIp")
                         .IsRequired()

@@ -7,13 +7,15 @@ namespace Infrastructure.Persistence;
 public class SecurityDbContext : DbContext
 {
     private static readonly Guid SystemTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
-    private readonly Guid? _currentTenantId;
+    private readonly ICurrentTenantService? _currentTenantService;
+    private readonly Guid? _fallbackTenantId;
+    private Guid? CurrentTenantId => _currentTenantService?.TenantId ?? _fallbackTenantId;
 
     public SecurityDbContext(DbContextOptions<SecurityDbContext> options, ICurrentTenantService currentTenantService) : base(options)
-        => _currentTenantId = currentTenantService.TenantId;
+        => _currentTenantService = currentTenantService;
 
     public SecurityDbContext(DbContextOptions<SecurityDbContext> options) : base(options)
-        => _currentTenantId = SystemTenantId;
+        => _fallbackTenantId = SystemTenantId;
 
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<ThreatLog> ThreatLogs => Set<ThreatLog>();
@@ -48,7 +50,7 @@ public class SecurityDbContext : DbContext
                 SimulationScenario x => x.TenantId,
                 TenantMembership x => x.TenantId,
                 ProtectedSite x => x.TenantId,
-                _ => _currentTenantId
+                _ => CurrentTenantId
             };
             var name = entry.Entity.GetType().Name;
             var changes = entry.Properties.Where(p => entry.State != EntityState.Modified || p.IsModified)
@@ -61,16 +63,16 @@ public class SecurityDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-        modelBuilder.Entity<ThreatLog>().HasQueryFilter(e => _currentTenantId.HasValue && e.TenantId == _currentTenantId.Value);
-        modelBuilder.Entity<IpReputation>().HasQueryFilter(e => _currentTenantId.HasValue && e.TenantId == _currentTenantId.Value);
-        modelBuilder.Entity<AlertRule>().HasQueryFilter(e => _currentTenantId.HasValue && e.TenantId == _currentTenantId.Value);
-        modelBuilder.Entity<Notification>().HasQueryFilter(e => _currentTenantId.HasValue && e.TenantId == _currentTenantId.Value);
-        modelBuilder.Entity<AutomatedResponseAction>().HasQueryFilter(e => _currentTenantId.HasValue && e.TenantId == _currentTenantId.Value);
-        modelBuilder.Entity<VulnerabilityReport>().HasQueryFilter(e => _currentTenantId.HasValue && e.TenantId == _currentTenantId.Value);
-        modelBuilder.Entity<SimulationScenario>().HasQueryFilter(e => _currentTenantId.HasValue && e.TenantId == _currentTenantId.Value);
-        modelBuilder.Entity<TenantMembership>().HasQueryFilter(e => _currentTenantId.HasValue && e.TenantId == _currentTenantId.Value);
-        modelBuilder.Entity<ProtectedSite>().HasQueryFilter(e => _currentTenantId.HasValue && e.TenantId == _currentTenantId.Value);
-        modelBuilder.Entity<SecurityAuditEvent>().HasQueryFilter(e => e.TenantId.HasValue && _currentTenantId.HasValue && e.TenantId == _currentTenantId.Value);
+        modelBuilder.Entity<ThreatLog>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<IpReputation>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<AlertRule>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<Notification>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<AutomatedResponseAction>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<VulnerabilityReport>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<SimulationScenario>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<TenantMembership>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<ProtectedSite>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<SecurityAuditEvent>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
 
         modelBuilder.Entity<SecurityAuditEvent>(e =>
         {
@@ -81,7 +83,7 @@ public class SecurityDbContext : DbContext
             e.Property(x => x.RequestPath).IsRequired().HasMaxLength(500);
             e.Property(x => x.SourceIp).HasMaxLength(45);
             e.Property(x => x.Details).IsRequired().HasMaxLength(2000);
-            e.Property(x => x.Severity).IsRequired();
+            e.Property(e => e.Severity).HasConversion<int>();
             e.HasIndex(x => new { x.TenantId, x.OccurredAt });
         });
 
@@ -91,7 +93,7 @@ public class SecurityDbContext : DbContext
             entity.Property(e => e.RequestPath).HasMaxLength(500);
             entity.Property(e => e.AttackType).HasMaxLength(100);
             entity.Property(e => e.CountryCode).HasMaxLength(5);
-            entity.Property(e => e.Severity).HasConversion<string>();
+            entity.Property(e => e.Severity).HasConversion<int>();
             entity.HasIndex(e => new { e.TenantId, e.SourceIp });
             entity.HasIndex(e => new { e.TenantId, e.LastSeenAt });
         });

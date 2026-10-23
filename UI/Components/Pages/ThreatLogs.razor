@@ -3,28 +3,27 @@
 @inject UI.Services.TalonApiClient Api
 @inject NavigationManager Navigation
 
-<h1>Security activity</h1>
+<h1>Threat logs</h1>
 @if (!Api.IsLoggedIn)
 {
-    <p>Log in to view tenant activity.</p><a class="btn btn-primary" href="/login">Log in</a>
+    <p>Log in to view tenant threat logs.</p><a class="btn btn-primary" href="/login">Log in</a>
 }
-else if (loading) { <p>Loading tenant activity...</p> }
+else if (loading) { <p>Loading threat logs...</p> }
 else if (error is not null) { <div class="alert alert-danger">@error</div> }
 else
 {
     <div class="card mb-3"><div class="card-body"><strong>Tenant:</strong> @Api.CurrentTenantName<br /><strong>Role:</strong> @Api.CurrentTenantRole</div></div>
     <div class="row g-2 mb-3">
-        <div class="col-md-3"><label class="form-label">Activity type</label><select class="form-select" @bind="selectedType"><option value="all">Threats and audit</option><option value="threat">Threat logs</option><option value="audit">Audit events</option></select></div>
         <div class="col-md-3"><label class="form-label">Since</label><InputDate class="form-control" @bind-Value="sinceDate" /></div>
-        <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary" @onclick="LoadAsync">Apply filters</button></div>
+        <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary" @onclick="LoadAsync">Apply filter</button></div>
     </div>
-    @if (items.Count == 0) { <p>No matching activity for this tenant.</p> }
+    @if (threats.Count == 0) { <p>No threat logs for this tenant.</p> }
     else
     {
-        <table class="table table-striped"><thead><tr><th>Date</th><th>Record type</th><th>Severity</th><th>Event</th><th>Source IP</th><th>Endpoint</th><th>Count / Details</th></tr></thead><tbody>
-        @foreach (var item in items)
+        <table class="table table-striped"><thead><tr><th>Last seen</th><th>Severity</th><th>Attack type</th><th>Source IP</th><th>Request path</th><th>Hit count</th><th>Country</th></tr></thead><tbody>
+        @foreach (var threat in threats)
         {
-            <tr><td>@item.OccurredAt.ToLocalTime()</td><td>@item.RecordType</td><td>@SeverityName(item.Severity)</td><td>@item.EventType</td><td>@item.SourceIp</td><td>@item.RequestPath</td><td>@(item.HitCount?.ToString() ?? item.Details)</td></tr>
+            <tr><td>@threat.LastSeenAt.ToLocalTime()</td><td>@SeverityName(threat.Severity)</td><td>@threat.AttackType</td><td>@threat.SourceIp</td><td>@threat.RequestPath</td><td>@threat.HitCount</td><td>@threat.CountryCode</td></tr>
         }
         </tbody></table>
     }
@@ -33,9 +32,8 @@ else
 @code {
     private bool loading = true;
     private string? error;
-    private string selectedType = "all";
     private DateTime? sinceDate;
-    private IReadOnlyList<UI.Services.TalonApiClient.TimelineItem> items = Array.Empty<UI.Services.TalonApiClient.TimelineItem>();
+    private IReadOnlyList<UI.Services.TalonApiClient.ThreatLogView> threats = Array.Empty<UI.Services.TalonApiClient.ThreatLogView>();
     private bool restored;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -51,9 +49,16 @@ else
     {
         loading = true;
         error = null;
-        var result = await Api.GetTimelineAsync(selectedType, sinceDate?.Date.ToUniversalTime());
-        if (result is null) error = "Could not load tenant security activity.";
-        items = result ?? Array.Empty<UI.Services.TalonApiClient.TimelineItem>();
+        try
+        {
+            threats = await Api.GetThreatLogsAsync(sinceDate?.Date)
+                ?? throw new InvalidOperationException("Threat-log request failed.");
+        }
+        catch (Exception ex)
+        {
+            error = $"Could not load threat logs ({ex.GetType().Name}). Reload the page or log in again.";
+            threats = Array.Empty<UI.Services.TalonApiClient.ThreatLogView>();
+        }
         loading = false;
         await InvokeAsync(StateHasChanged);
     }

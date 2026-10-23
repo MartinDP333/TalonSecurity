@@ -29,9 +29,9 @@ public sealed class SecurityAuditLogger
                 x => x.EventType == "LoginFailure" && x.SourceIp == sourceIp && x.OccurredAt >= cutoff,
                 ct);
             var totalFailures = previousFailures + 1;
-            severity = totalFailures >= 5 ? (int)SeverityLevel.Critical
-                : totalFailures >= 3 ? (int)SeverityLevel.High
-                : (int)SeverityLevel.Medium;
+            severity = totalFailures >= 5 ? SeverityLevel.Critical
+                : totalFailures >= 3 ? SeverityLevel.High
+                : SeverityLevel.Medium;
             details = $"{details}; failed attempts from source IP in last 15m: {totalFailures}";
         }
 
@@ -59,13 +59,13 @@ public sealed class SecurityAuditLogger
         }
     }
 
-    private static int Classify(string eventType, string category, int? statusCode)
+    private static SeverityLevel Classify(string eventType, string category, int? statusCode)
     {
-        if (eventType == "LoginFailure") return (int)SeverityLevel.Medium;
-        if (eventType == "AuthorizationFailure") return (int)SeverityLevel.High;
-        if (eventType == "UnhandledException" || statusCode is >= 500) return (int)SeverityLevel.High;
-        if (category == "DatabaseChange" || category == "SensitiveAccess") return (int)SeverityLevel.Low;
-        if (statusCode is >= 400) return (int)SeverityLevel.Medium;
-        return (int)SeverityLevel.Low;
+        if (eventType == "LoginFailure") return SeverityLevel.Medium;
+        if (eventType == "AuthorizationFailure") return SeverityLevel.High;
+        if (eventType == "UnhandledException" || statusCode is >= 500) return SeverityLevel.High;
+        if (category == "DatabaseChange" || category == "SensitiveAccess") return SeverityLevel.Low;
+        if (statusCode is >= 400) return SeverityLevel.Medium;
+        return SeverityLevel.Low;
     }
 }

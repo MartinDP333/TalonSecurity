@@ -15,11 +15,11 @@ public class TrafficTrackingMiddleware
 
     public async Task InvokeAsync(HttpContext context, IPublishEndpoint publishEndpoint)
     {
-        if (ClientIpAddress.IsInternal(context))
-        {
-            await _next(context);
-            return;
-        }
+        //if (ClientIpAddress.IsInternal(context))
+        //{
+        //    await _next(context);
+        //    return;
+        //}
 
         var ipAddress = ClientIpAddress.Get(context);
         if (!string.IsNullOrEmpty(ipAddress))

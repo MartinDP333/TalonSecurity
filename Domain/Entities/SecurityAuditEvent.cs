@@ -1,3 +1,4 @@
+using Domain.Enums;
 using System;
 
 namespace Domain.Entities;
@@ -13,12 +14,12 @@ public class SecurityAuditEvent : BaseEntity
     public string? SourceIp { get; private set; }
     public int? StatusCode { get; private set; }
     public string Details { get; private set; }
-    public int Severity { get; private set; }
+    public SeverityLevel Severity { get; private set; }
     public DateTime OccurredAt { get; private set; }
 
     private SecurityAuditEvent() { }
 
-    public SecurityAuditEvent(Guid? tenantId, string? userName, string eventType, string category, string httpMethod, string requestPath, string? sourceIp, int? statusCode, string? details, int severity = 0)
+    public SecurityAuditEvent(Guid? tenantId, string? userName, string eventType, string category, string httpMethod, string requestPath, string? sourceIp, int? statusCode, string? details, SeverityLevel severity = SeverityLevel.Low)
     {
         TenantId = tenantId;
         UserName = Limit(userName, 200);

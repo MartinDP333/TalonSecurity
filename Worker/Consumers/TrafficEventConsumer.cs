@@ -45,13 +45,10 @@ public class TrafficEventConsumer : IConsumer<TrafficEvent>
             "[REDIS CHECK] IP: {IpAddress} | Antal requests (sidste minut): {RequestCount} | Mistænkelig: {IsSuspicious}",
             data.IpAddress, requestCount, isSuspicious);
 
-        var systemTenant = await _dbContext.Tenants.FindAsync(SystemTenantId);
-        if (systemTenant == null)
-        {
-            systemTenant = new Tenant(SystemTenantId, "System");
-            _dbContext.Tenants.Add(systemTenant);
-            await _dbContext.SaveChangesAsync();
-        }
+        await _dbContext.Database.ExecuteSqlInterpolatedAsync($@"
+IF NOT EXISTS (SELECT 1 FROM dbo.Tenants WITH (UPDLOCK, HOLDLOCK) WHERE Id = {SystemTenantId})
+    INSERT INTO dbo.Tenants (Id, Name, CreatedAt)
+    VALUES ({SystemTenantId}, N'System', SYSUTCDATETIME());");
 
         var reputation = await _dbContext.IpReputations
             .IgnoreQueryFilters()

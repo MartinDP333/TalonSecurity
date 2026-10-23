@@ -83,8 +83,8 @@ app.UseSwaggerUI(options =>
     options.RoutePrefix = "swagger";
 });
 app.UseAuthentication();
-app.UseMiddleware<SecurityAuditMiddleware>();
 app.UseMiddleware<TenantResolutionMiddleware>();
+app.UseMiddleware<SecurityAuditMiddleware>();
 app.UseAuthorization();
 app.UseMiddleware<IpBlockingMiddleware>();
 app.UseMiddleware<TrafficTrackingMiddleware>();
