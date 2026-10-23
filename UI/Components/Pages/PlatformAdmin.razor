@@ -91,10 +91,11 @@ else
         tenants = await Api.GetAdminTenantsAsync() ?? Array.Empty<UI.Services.TalonApiClient.AdminTenant>();
         memberships = await Api.GetAdminMembershipsAsync() ?? Array.Empty<UI.Services.TalonApiClient.AdminMembership>();
         roles = await Api.GetTenantRolesAsync() ?? roles;
+        if (Api.SessionExpired) Navigation.NavigateTo("/login", forceLoad: true);
     }
-    private async Task CreateUser() { message = await Api.CreateAdminUserAsync(newUser.UserName, newUser.Password) ? "User created." : "Could not create user; username may exist already."; newUser = new(); await Refresh(); }
-    private async Task CreateTenant() { message = await Api.CreateAdminTenantAsync(newTenant.Name, newTenant.OwnerUserName) ? "Tenant created and owner linked as Admin." : "Could not create tenant; check the selected owner and tenant name."; newTenant = new(); await Refresh(); }
-    private async Task AddMembership() { message = await Api.AddAdminMembershipAsync(addMember.TenantId, addMember.UserName, addMember.Role) ? "Membership added." : "Could not add membership; it may already exist."; addMember = new(); await Refresh(); }
+    private async Task CreateUser() { var ok = await Api.CreateAdminUserAsync(newUser.UserName, newUser.Password); message = ok ? "User created." : (Api.SessionExpired ? "Your session is no longer valid for the current data. Redirecting to log in..." : "Could not create user; username may exist already."); newUser = new(); await Refresh(); }
+    private async Task CreateTenant() { var ok = await Api.CreateAdminTenantAsync(newTenant.Name, newTenant.OwnerUserName); message = ok ? "Tenant created and owner linked as Admin." : (Api.SessionExpired ? "Your session is no longer valid for the current data. Redirecting to log in..." : "Could not create tenant; check the selected owner and tenant name."); newTenant = new(); await Refresh(); }
+    private async Task AddMembership() { var ok = await Api.AddAdminMembershipAsync(addMember.TenantId, addMember.UserName, addMember.Role); message = ok ? "Membership added." : (Api.SessionExpired ? "Your session is no longer valid for the current data. Redirecting to log in..." : "Could not add membership; it may already exist."); addMember = new(); await Refresh(); }
     private Task ChangeRoleFromEvent(UI.Services.TalonApiClient.AdminMembership member, ChangeEventArgs args)
         => ChangeRole(member, args.Value?.ToString() ?? "Viewer");
 

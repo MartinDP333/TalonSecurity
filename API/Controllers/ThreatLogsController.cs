@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Application.Interfaces;
 using Domain.Enums;
 using Infrastructure.Persistence;
@@ -20,10 +21,13 @@ public sealed class ThreatLogsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Get(CancellationToken cancellationToken)
     {
-        if (!_tenant.TenantId.HasValue) return Forbid();
-        var tenantId = _tenant.TenantId.Value;
+        var tenantClaim = User.FindFirstValue("tenant_id");
+        if (!Guid.TryParse(tenantClaim, out var tenantId) || tenantId == Guid.Empty || _tenant.TenantId != tenantId)
+            return Forbid();
 
-        var logs = await _db.ThreatLogs.AsNoTracking()
+        // The validated JWT tenant claim is authoritative. Apply it explicitly so this
+        // result cannot depend on a query filter captured before tenant resolution.
+        var logs = await _db.ThreatLogs.IgnoreQueryFilters().AsNoTracking()
             .Where(x => x.TenantId == tenantId)
             .OrderByDescending(x => x.LastSeenAt)
             .Select(x => new { x.Id, x.SourceIp, x.RequestPath, x.AttackType, Severity = (int)x.Severity, x.HitCount, x.FirstSeenAt, x.LastSeenAt, x.CountryCode })

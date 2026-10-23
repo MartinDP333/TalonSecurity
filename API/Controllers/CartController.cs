@@ -1,49 +1,29 @@
+using Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
-using MassTransit;
-using Shared.Contracts;
 
-namespace API.Controllers
+namespace API.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public sealed class CartController : ControllerBase
 {
-    [ApiController]
-    [Route("api/[controller]")]
-    public class CartController : ControllerBase
+    private readonly ICurrentTenantService _tenantService;
+
+    public CartController(ICurrentTenantService tenantService) => _tenantService = tenantService;
+
+    [HttpPost("add")]
+    public IActionResult AddToCart([FromBody] string item)
     {
-        private readonly IPublishEndpoint _publishEndpoint;
+        var forwardedFor = Request.Headers["X-Forwarded-For"].FirstOrDefault();
+        var sourceIp = !string.IsNullOrWhiteSpace(forwardedFor)
+            ? forwardedFor
+            : HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
 
-        public CartController(IPublishEndpoint publishEndpoint)
+        return Ok(new
         {
-            _publishEndpoint = publishEndpoint;
-        }
-
-        [HttpPost("add")]
-        public async Task<IActionResult> AddToCart([FromBody] string item)
-        {
-            string? clientIp = "Ukendt";
-
-            if (Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedHeader))
-            {
-                clientIp = forwardedHeader.FirstOrDefault();
-            }
-            else if (HttpContext.Connection.RemoteIpAddress != null)
-            {
-                clientIp = HttpContext.Connection.RemoteIpAddress.ToString();
-            }
-
-            string userAgent = Request.Headers["User-Agent"].ToString();
-
-            var trafficEvent = new TrafficEvent
-            {
-                IpAddress = clientIp ?? "Ukendt",
-                Endpoint = "/api/cart/add",
-                UserAgent = string.IsNullOrEmpty(userAgent) ? "Ukendt" : userAgent,
-                Timestamp = DateTime.UtcNow
-            };
-
-            await _publishEndpoint.Publish(trafficEvent);
-
-            Console.WriteLine($"[API] Trafik hændelse sendt til RabbitMQ for IP: {clientIp}");
-
-            return Ok(new { Message = $"Vare '{item}' tilføjet", Ip = clientIp });
-        }
+            Message = $"Item '{item}' added",
+            Ip = sourceIp,
+            TenantId = _tenantService.TenantId
+        });
     }
 }

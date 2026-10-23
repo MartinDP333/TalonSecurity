@@ -14,11 +14,17 @@ spec:
     spec:
       containers:
       - name: api
-        image: martin313/talon-api:latest
-        imagePullPolicy: Always
+        image: talon-api:test-apps-4
+        imagePullPolicy: Never
         ports:
         - containerPort: 8080
         env:
+        - name: ASPNETCORE_ENVIRONMENT
+          value: Development
+        - name: TenantResolution__AllowHeaderForTesting
+          value: "true"
+        - name: TenantResolution__UseProtectedSites
+          value: "true"
         - name: JWT_KEY
           valueFrom:
             secretKeyRef:
@@ -32,7 +38,7 @@ spec:
         - name: ConnectionStrings__DefaultConnection
           value: "Server=db-mssql;Database=TalonSecurityDb;User Id=sa;Password=$(MSSQL_SA_PASSWORD);TrustServerCertificate=True"
         - name: RabbitMQ__HostName
-          value: "rabbitmq"
+          value: rabbitmq
         - name: RabbitMQ__UserName
           valueFrom:
             secretKeyRef:

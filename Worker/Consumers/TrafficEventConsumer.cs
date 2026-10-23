@@ -34,7 +34,16 @@ public class TrafficEventConsumer : IConsumer<TrafficEvent>
     {
         var data = context.Message;
         var db = _redis.GetDatabase();
-        var redisKey = $"ip:{data.IpAddress}:requests";
+        var tenantId = data.TenantId;
+        if (!tenantId.HasValue && !string.IsNullOrWhiteSpace(data.Hostname))
+        {
+            tenantId = await _dbContext.ProtectedSites.IgnoreQueryFilters().AsNoTracking()
+                .Where(site => site.IsEnabled && site.Hostname == data.Hostname.Trim().ToLower())
+                .Select(site => (Guid?)site.TenantId)
+                .SingleOrDefaultAsync();
+        }
+        var resolvedTenantId = tenantId ?? SystemTenantId;
+        var redisKey = $"tenant:{resolvedTenantId}:ip:{data.IpAddress}:requests";
 
         var requestCount = await db.StringIncrementAsync(redisKey);
         if (requestCount == 1)
@@ -52,11 +61,11 @@ IF NOT EXISTS (SELECT 1 FROM dbo.Tenants WITH (UPDLOCK, HOLDLOCK) WHERE Id = {Sy
 
         var reputation = await _dbContext.IpReputations
             .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(r => r.TenantId == SystemTenantId && r.IpAddress == data.IpAddress);
+            .FirstOrDefaultAsync(r => r.TenantId == resolvedTenantId && r.IpAddress == data.IpAddress);
 
         if (reputation == null)
         {
-            reputation = new IpReputation(SystemTenantId, data.IpAddress, isSuspicious ? 50 : 10);
+            reputation = new IpReputation(resolvedTenantId, data.IpAddress, isSuspicious ? 50 : 10);
             _dbContext.IpReputations.Add(reputation);
         }
         else if (reputation.CheckAndLiftBlockIfExpired())
@@ -80,7 +89,7 @@ IF NOT EXISTS (SELECT 1 FROM dbo.Tenants WITH (UPDLOCK, HOLDLOCK) WHERE Id = {Sy
             reputation.ApplyProgressiveBlock();
 
             await _threatLogService.LogThreatAsync(
-                tenantId: SystemTenantId,
+                tenantId: resolvedTenantId,
                 sourceIp: data.IpAddress,
                 requestPath: data.Endpoint ?? "/api/cart/add",
                 attackType: "RateLimit / Spam",
@@ -93,12 +102,30 @@ IF NOT EXISTS (SELECT 1 FROM dbo.Tenants WITH (UPDLOCK, HOLDLOCK) WHERE Id = {Sy
         try
         {
             await _dbContext.SaveChangesAsync();
-            _logger.LogInformation("Ændringer gemt i databasen for IP: {IpAddress}", data.IpAddress);
+            _logger.LogInformation("Changes saved for tenant {TenantId}, IP {IpAddress}", resolvedTenantId, data.IpAddress);
+        }
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex) && reputation is not null)
+        {
+            // Concurrent first requests can race to insert the same tenant/IP reputation.
+            // ThreatLogService has already persisted the rate-limit threat independently.
+            _dbContext.Entry(reputation).State = EntityState.Detached;
+            _logger.LogWarning("Concurrent IP reputation insert for tenant {TenantId}, IP {IpAddress}; rate-limit threat remains recorded.", resolvedTenantId, data.IpAddress);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "FEJL ved gemning til database for IP: {IpAddress}", data.IpAddress);
+            _logger.LogError(ex, "Unable to save traffic state for tenant {TenantId}, IP {IpAddress}", resolvedTenantId, data.IpAddress);
             throw;
         }
+    }
+
+    private static bool IsUniqueConstraintViolation(DbUpdateException exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+        {
+            if (current.Message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase)
+                || current.Message.Contains("unique index", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 }

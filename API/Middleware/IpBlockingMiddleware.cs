@@ -1,4 +1,5 @@
 using API;
+using Application.Interfaces;
 using Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,7 +20,7 @@ public class IpBlockingMiddleware
         _scopeFactory = scopeFactory;
     }
 
-    public async Task InvokeAsync(HttpContext context)
+    public async Task InvokeAsync(HttpContext context, ICurrentTenantService tenantService)
     {
         //if (ClientIpAddress.IsInternal(context))
         //{
@@ -33,9 +34,10 @@ public class IpBlockingMiddleware
         {
             using var scope = _scopeFactory.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<SecurityDbContext>();
+            var tenantId = tenantService.TenantId;
             var reputation = await dbContext.IpReputations
                 .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(r => r.IpAddress == ipAddress);
+                .FirstOrDefaultAsync(r => r.IpAddress == ipAddress && r.TenantId == tenantId);
 
             if (reputation != null)
             {

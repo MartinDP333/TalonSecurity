@@ -74,6 +74,7 @@ public sealed class WafAuditParser : IWafAuditParser
                 RuleMessage = message,
                 RawPayload = raw,
                 TenantName = tenantName,
+                Hostname = hostName.Split(':')[0].Trim().ToLowerInvariant(),
                 Timestamp = DateTime.UtcNow
             };
         }

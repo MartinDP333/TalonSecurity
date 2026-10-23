@@ -19,7 +19,8 @@ public sealed class SecurityAuditMiddleware
         var sensitive = !loginOrTenantLookup && (path.StartsWith("/api/auth", StringComparison.OrdinalIgnoreCase)
             || path.StartsWith("/api/memberships", StringComparison.OrdinalIgnoreCase)
             || path.StartsWith("/api/platform-admin", StringComparison.OrdinalIgnoreCase)
-            || path.StartsWith("/api/protected-sites", StringComparison.OrdinalIgnoreCase));
+            || path.StartsWith("/api/protected-sites", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/test-apps", StringComparison.OrdinalIgnoreCase));
 
         try
         {

@@ -1,6 +1,7 @@
 using Application.Interfaces;
 using Domain.Entities;
 using Infrastructure.Persistence;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -22,7 +23,12 @@ public sealed class ProtectedSitesController : ControllerBase
     {
         if (!_tenant.TenantId.HasValue) return Forbid();
         if (!User.IsInRole("Admin") && !User.IsInRole("PlatformAdmin")) return Forbid();
-        return Ok(await _db.ProtectedSites.AsNoTracking().Select(x => new { x.Id, x.Hostname, x.OriginUrl, x.IsEnabled }).ToListAsync(cancellationToken));
+        var tenantId = _tenant.TenantId.Value;
+        var sites = await _db.ProtectedSites.IgnoreQueryFilters().AsNoTracking()
+            .Where(x => x.TenantId == tenantId)
+            .Select(x => new { x.Id, x.TenantId, x.Hostname, x.OriginUrl, x.IsEnabled })
+            .ToListAsync(cancellationToken);
+        return Ok(sites);
     }
 
     [HttpPost]

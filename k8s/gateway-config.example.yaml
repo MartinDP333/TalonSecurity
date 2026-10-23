@@ -3,5 +3,5 @@ kind: ConfigMap
 metadata:
   name: talon-gateway-config
 data:
-  alpha.talon.test: "Talon Security Alpha|http://webshop-origin.default.svc.cluster.local"
-  beta.talon.test: "Talon Security Beta|http://museum-origin.default.svc.cluster.local"
+  webshop.talon.test: "WebShop Test|http://talon-api-service.default.svc.cluster.local/test-apps/webshop"
+  bank.talon.test: "Bank Test|http://talon-api-service.default.svc.cluster.local/test-apps/bank"

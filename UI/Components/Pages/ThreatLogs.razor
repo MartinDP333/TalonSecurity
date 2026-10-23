@@ -56,6 +56,12 @@ else
         }
         catch (Exception ex)
         {
+            if (Api.SessionExpired)
+            {
+                loading = false;
+                Navigation.NavigateTo("/login", forceLoad: true);
+                return;
+            }
             error = $"Could not load threat logs ({ex.GetType().Name}). Reload the page or log in again.";
             threats = Array.Empty<UI.Services.TalonApiClient.ThreatLogView>();
         }

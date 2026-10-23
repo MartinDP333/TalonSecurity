@@ -9,8 +9,10 @@ public sealed class TenantResolutionMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly IWebHostEnvironment _environment;
+    private readonly IConfiguration _configuration;
 
-    public TenantResolutionMiddleware(RequestDelegate next, IWebHostEnvironment environment) => (_next, _environment) = (next, environment);
+    public TenantResolutionMiddleware(RequestDelegate next, IWebHostEnvironment environment, IConfiguration configuration)
+        => (_next, _environment, _configuration) = (next, environment, configuration);
 
     public async Task InvokeAsync(HttpContext context, ICurrentTenantService tenantService)
     {
@@ -22,9 +24,56 @@ public sealed class TenantResolutionMiddleware
 
         var claimValue = context.User.FindFirstValue("tenant_id");
         var headerValue = context.Request.Headers["X-Tenant-Id"].FirstOrDefault();
-        var value = claimValue ?? (_environment.IsDevelopment() ? headerValue : null);
+        var allowHeaderForTesting = _configuration.GetValue<bool>("TenantResolution:AllowHeaderForTesting");
+        var hostname = context.Request.Host.Host.Trim().ToLowerInvariant();
+        var routeByProtectedSite = _configuration.GetValue<bool>("TenantResolution:UseProtectedSites");
+        if ((allowHeaderForTesting || routeByProtectedSite) && !_environment.IsDevelopment())
+        {
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            await context.Response.WriteAsync("Development tenant routing options must not be enabled outside Development.");
+            return;
+        }
+        Guid tenantId;
+        if (!string.IsNullOrWhiteSpace(claimValue))
+        {
+            if (!Guid.TryParse(claimValue, out tenantId))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsync("Invalid tenant claim.");
+                return;
+            }
+        }
+        else
+        {
+            Guid? protectedSiteTenantId = null;
+            if (routeByProtectedSite)
+            {
+                var lookupOptions = context.RequestServices.GetRequiredService<DbContextOptions<SecurityDbContext>>();
+                await using var lookupDb = new SecurityDbContext(lookupOptions);
+                protectedSiteTenantId = await lookupDb.ProtectedSites.IgnoreQueryFilters().AsNoTracking()
+                    .Where(x => x.IsEnabled && x.Hostname == hostname)
+                    .Select(x => (Guid?)x.TenantId)
+                    .SingleOrDefaultAsync();
+            }
 
-        if (!Guid.TryParse(value, out var tenantId) || tenantId == Guid.Empty)
+            if (protectedSiteTenantId.HasValue)
+            {
+                // Registered host mapping is authoritative; do not allow a caller header to cross tenants.
+                tenantId = protectedSiteTenantId.Value;
+            }
+            else if (allowHeaderForTesting && Guid.TryParse(headerValue, out var headerTenantId))
+            {
+                tenantId = headerTenantId;
+            }
+            else
+            {
+                context.Response.StatusCode = StatusCodes.Status421MisdirectedRequest;
+                await context.Response.WriteAsync("No tenant claim, enabled protected-site hostname, or valid test tenant header was provided.");
+                return;
+            }
+        }
+
+        if (tenantId == Guid.Empty)
         {
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             await context.Response.WriteAsync("A valid tenant context is required.");

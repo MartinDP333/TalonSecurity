@@ -1,4 +1,5 @@
 using API;
+using Application.Interfaces;
 using MassTransit;
 using Shared.Contracts;
 
@@ -13,7 +14,7 @@ public class TrafficTrackingMiddleware
         _next = next;
     }
 
-    public async Task InvokeAsync(HttpContext context, IPublishEndpoint publishEndpoint)
+    public async Task InvokeAsync(HttpContext context, IPublishEndpoint publishEndpoint, ICurrentTenantService tenant)
     {
         //if (ClientIpAddress.IsInternal(context))
         //{
@@ -27,6 +28,8 @@ public class TrafficTrackingMiddleware
             await publishEndpoint.Publish(new TrafficEvent
             {
                 IpAddress = ipAddress,
+                TenantId = tenant.TenantId,
+                Hostname = context.Request.Host.Host,
                 Endpoint = context.Request.Path,
                 UserAgent = context.Request.Headers.UserAgent.ToString() ?? "Ukendt",
                 Timestamp = DateTime.UtcNow

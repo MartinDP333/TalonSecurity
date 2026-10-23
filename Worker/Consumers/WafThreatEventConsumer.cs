@@ -20,11 +20,21 @@ public sealed class WafThreatEventConsumer : IConsumer<WafThreatEvent>
     {
         var item = context.Message;
         var tenantId = SystemTenantId;
-        if (!string.IsNullOrWhiteSpace(item.TenantName))
+        if (!string.IsNullOrWhiteSpace(item.Hostname))
         {
-            var tenant = await _db.Tenants.IgnoreQueryFilters().SingleOrDefaultAsync(x => x.Name == item.TenantName);
-            if (tenant is not null) tenantId = tenant.Id;
-            else _logger.LogWarning("Unknown WAF tenant mapping {TenantName}; using system tenant", item.TenantName);
+            var site = await _db.ProtectedSites.IgnoreQueryFilters().AsNoTracking()
+                .SingleOrDefaultAsync(x => x.IsEnabled && x.Hostname == item.Hostname.Trim().ToLowerInvariant());
+            if (site is null)
+            {
+                _logger.LogError("Discarding WAF event {EventId}: no protected site registered for hostname {Hostname}", item.EventId, item.Hostname);
+                return;
+            }
+            tenantId = site.TenantId;
+        }
+        else
+        {
+            _logger.LogError("Discarding WAF event {EventId}: event has no hostname for tenant attribution", item.EventId);
+            return;
         }
 
         await _threatLogService.LogThreatAsync(tenantId, item.SourceIp, item.RequestPath, item.AttackType, SeverityLevel.High, item.RawPayload, "N/A");
