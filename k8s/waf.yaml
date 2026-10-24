@@ -50,8 +50,8 @@ spec:
         - name: waf-audit-logs
           mountPath: /var/log/modsecurity
       - name: waf-adapter
-        image: talon-waf-adapter:test-apps-4
-        imagePullPolicy: Never
+        image: martin313/talon-waf-adapter:latest
+        imagePullPolicy: Always
         env:
         - name: RabbitMQ__HostName
           value: "rabbitmq"

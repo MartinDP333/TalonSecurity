@@ -1,0 +1,8 @@
+# Strategic merge patch: image updates only; keep this file as a reference, not a standalone Deployment manifest.
+spec:
+  template:
+    spec:
+      containers:
+      - name: api
+        image: martin313/talon-api:latest
+        imagePullPolicy: Always

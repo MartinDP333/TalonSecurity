@@ -16,8 +16,8 @@ spec:
     spec:
       containers:
       - name: worker
-        image: talon-worker:test-apps-3
-        imagePullPolicy: Never
+        image: martin313/talon-worker:latest
+        imagePullPolicy: Always
         env:
         - name: RabbitMQ__HostName
           value: rabbitmq
