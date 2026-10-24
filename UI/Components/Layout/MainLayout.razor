@@ -1,6 +1,9 @@
-﻿@inherits LayoutComponentBase
+﻿@using System.Text.Json
+@using Microsoft.JSInterop
+@inherits LayoutComponentBase
 @inject UI.Services.TalonApiClient Api
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <nav class="navbar navbar-dark bg-dark">
     <div class="container">
@@ -8,6 +11,52 @@
         <div class="d-flex align-items-center gap-3">
             @if (authReady && Api.IsLoggedIn)
             {
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-warning dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        Alerts
+                        @if (UnreadCount > 0)
+                        {
+                            <span class="badge bg-warning text-dark ms-1">@UnreadCount</span>
+                        }
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end" style="min-width: 30rem; max-width: 32rem;">
+                        @if (loadingNotifications)
+                        {
+                            <li><span class="dropdown-item-text text-muted">Loading alerts...</span></li>
+                        }
+                        else if (notifications.Count == 0)
+                        {
+                            <li><span class="dropdown-item-text text-muted">No recent high/critical threats or audit events.</span></li>
+                        }
+                        else
+                        {
+                            @foreach (var group in notifications.GroupBy(x => x.TenantName).OrderBy(x => x.Key))
+                            {
+                                <li><h6 class="dropdown-header text-warning">@group.Key <span class="badge bg-secondary ms-1">@group.Count(x => IsUnread(x)) unread</span></h6></li>
+                                @foreach (var alert in group.OrderByDescending(x => x.OccurredAt))
+                                {
+                                    <li>
+                                        <button class="dropdown-item text-start @(IsUnread(alert) ? "fw-semibold" : "text-secondary")" type="button" @onclick="() => OpenNotificationAsync(alert)">
+                                            <div class="d-flex justify-content-between align-items-center mb-1 gap-2">
+                                                <div class="small text-light">@alert.RecordType · @alert.EventType</div>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <span class="badge @SeverityClass(alert.Severity)">@SeverityName(alert.Severity)</span>
+                                                    @if (IsUnread(alert))
+                                                    {
+                                                        <span class="badge bg-primary">New</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <div class="small text-truncate">@alert.Details</div>
+                                            <div class="small text-secondary">@alert.OccurredAt.ToLocalTime().ToString("g")</div>
+                                        </button>
+                                    </li>
+                                }
+                            }
+                        }
+                    </ul>
+                </div>
+
                 <span class="text-light">@Api.CurrentTenantName</span>
                 <a class="nav-link text-light" href="/" @onclick:preventDefault @onclick="GoHome">Tenants</a>
                 <a class="nav-link text-light" href="/webshop">Webshop</a>
@@ -36,15 +85,93 @@
 </main>
 
 @code {
+    private const string ReadStateStorageKey = "talon-alerts-read";
     private bool authReady;
+    private bool loadingNotifications;
+    private IReadOnlyList<UI.Services.TalonApiClient.PriorityNotification> notifications = Array.Empty<UI.Services.TalonApiClient.PriorityNotification>();
+    private HashSet<string> readNotifications = new();
+
+    private int UnreadCount => notifications.Count(IsUnread);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
         await Api.RestoreAuthAsync();
         authReady = true;
+        if (Api.IsLoggedIn)
+        {
+            await LoadReadStateAsync();
+            await LoadNotificationsAsync();
+        }
         await InvokeAsync(StateHasChanged);
     }
+
+    private async Task LoadReadStateAsync()
+    {
+        var raw = await JS.InvokeAsync<string?>("localStorage.getItem", ReadStateStorageKey);
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            readNotifications = new HashSet<string>();
+            return;
+        }
+
+        try
+        {
+            readNotifications = JsonSerializer.Deserialize<HashSet<string>>(raw) ?? new HashSet<string>();
+        }
+        catch
+        {
+            readNotifications = new HashSet<string>();
+        }
+    }
+
+    private async Task PersistReadStateAsync()
+        => await JS.InvokeVoidAsync("localStorage.setItem", ReadStateStorageKey, JsonSerializer.Serialize(readNotifications));
+
+    private async Task LoadNotificationsAsync()
+    {
+        loadingNotifications = true;
+        try
+        {
+            notifications = await Api.GetPriorityNotificationsAsync(10) ?? Array.Empty<UI.Services.TalonApiClient.PriorityNotification>();
+        }
+        catch
+        {
+            notifications = Array.Empty<UI.Services.TalonApiClient.PriorityNotification>();
+        }
+        finally
+        {
+            loadingNotifications = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static string GetNotificationKey(UI.Services.TalonApiClient.PriorityNotification alert)
+        => $"{alert.TenantId}|{alert.RecordType}|{alert.EventType}|{alert.OccurredAt:O}|{alert.SourceIp ?? string.Empty}|{alert.RequestPath}";
+
+    private bool IsUnread(UI.Services.TalonApiClient.PriorityNotification alert)
+        => !readNotifications.Contains(GetNotificationKey(alert));
+
+    private async Task OpenNotificationAsync(UI.Services.TalonApiClient.PriorityNotification alert)
+    {
+        var key = GetNotificationKey(alert);
+        if (!readNotifications.Contains(key))
+        {
+            readNotifications.Add(key);
+            await PersistReadStateAsync();
+        }
+
+        var currentTenantId = Api.CurrentTenantId;
+        if (!string.IsNullOrWhiteSpace(currentTenantId) && Guid.TryParse(currentTenantId, out var currentId) && alert.TenantId != currentId)
+        {
+            await Api.SwitchTenantAsync(alert.TenantName);
+        }
+
+        Navigation.NavigateTo("/threatlogs");
+    }
+
+    private static string SeverityName(int value) => value switch { 0 => "Low", 1 => "Medium", 2 => "High", 3 => "Critical", _ => value.ToString() };
+    private static string SeverityClass(int value) => value switch { 0 => "bg-secondary", 1 => "bg-info", 2 => "bg-warning text-dark", 3 => "bg-danger", _ => "bg-secondary" };
 
     private void GoHome() => Navigation.NavigateTo("/", replace: false);
 }

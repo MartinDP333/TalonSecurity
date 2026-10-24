@@ -178,6 +178,34 @@ public sealed class TalonApiClient
         return await r.Content.ReadFromJsonAsync<List<ThreatLogView>>(cancellationToken: ct);
     }
 
+    public async Task<IReadOnlyList<TimelineItem>?> GetTimelineAsync(string type = "all", DateTime? since = null, CancellationToken ct = default)
+    {
+        var c = Authenticated();
+        if (c is null) return null;
+        SetActiveTenantHeader(c);
+        var query = "api/threatlogs/timeline?type=" + Uri.EscapeDataString(type ?? "all") + (since.HasValue ? $"&since={Uri.EscapeDataString(since.Value.ToUniversalTime().ToString("O"))}" : "");
+        using var r = await c.GetAsync(query, ct);
+        if (!r.IsSuccessStatusCode)
+        {
+            if (await AuthFailedAsync(r)) throw new InvalidOperationException("Your session is no longer valid. Please log in again.");
+            throw new HttpRequestException($"Threat-log timeline returned {(int)r.StatusCode} ({r.StatusCode}).", null, r.StatusCode);
+        }
+        return await r.Content.ReadFromJsonAsync<List<TimelineItem>>(cancellationToken: ct);
+    }
+
+    public async Task<IReadOnlyList<PriorityNotification>?> GetPriorityNotificationsAsync(int take = 8, CancellationToken ct = default)
+    {
+        var c = Authenticated();
+        if (c is null) return null;
+        var r = await c.GetAsync($"api/threatlogs/notifications?take={Math.Max(1, take)}", ct);
+        if (!r.IsSuccessStatusCode)
+        {
+            if (await AuthFailedAsync(r)) throw new InvalidOperationException("Your session is no longer valid. Please log in again.");
+            throw new HttpRequestException($"Priority notification API returned {(int)r.StatusCode} ({r.StatusCode}).", null, r.StatusCode);
+        }
+        return await r.Content.ReadFromJsonAsync<List<PriorityNotification>>(cancellationToken: ct);
+    }
+
     private void SetActiveTenantHeader(HttpClient client)
     {
         var tenantId = _auth.TenantId;
@@ -229,6 +257,7 @@ public sealed class TalonApiClient
     public sealed record MemberView(string UserName, string Role, bool IsActive, Guid TenantId);
     public sealed record LoginResponse(string AccessToken, Guid TenantId, string TenantName, string Role, bool IsPlatformAdmin);
     public sealed record TimelineItem(Guid Id, string RecordType, DateTime OccurredAt, string EventType, string? SourceIp, string RequestPath, int Severity, int? HitCount, string? Details);
+    public sealed record PriorityNotification(Guid TenantId, string TenantName, string RecordType, string EventType, int Severity, string? SourceIp, string RequestPath, string Details, DateTime OccurredAt);
     public sealed record ThreatLogView(Guid Id, string SourceIp, string RequestPath, string AttackType, int Severity, int HitCount, DateTime FirstSeenAt, DateTime LastSeenAt, string CountryCode);
     public sealed record AuditEventView(Guid Id, string EventType, string Category, string? SourceIp, string RequestPath, int Severity, DateTime OccurredAt, string Details);
     public sealed record CartResult(string Message, string Ip, Guid? TenantId);

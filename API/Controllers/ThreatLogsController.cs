@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Application.Interfaces;
+using Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,10 +12,11 @@ namespace API.Controllers;
 public sealed class ThreatLogsController : ControllerBase
 {
     private readonly ICurrentTenantService _tenant;
+    private readonly ITenantCatalogService _tenantCatalog;
     private readonly IThreatTelemetryService _telemetry;
 
-    public ThreatLogsController(ICurrentTenantService tenant, IThreatTelemetryService telemetry)
-        => (_tenant, _telemetry) = (tenant, telemetry);
+    public ThreatLogsController(ICurrentTenantService tenant, ITenantCatalogService tenantCatalog, IThreatTelemetryService telemetry)
+        => (_tenant, _tenantCatalog, _telemetry) = (tenant, tenantCatalog, telemetry);
 
     [HttpGet]
     public async Task<IActionResult> Get(CancellationToken cancellationToken)
@@ -44,4 +46,66 @@ public sealed class ThreatLogsController : ControllerBase
         var result = await _telemetry.GetTimelineAsync(_tenant.TenantId.Value, type, since, cancellationToken);
         return Ok(result);
     }
+
+    [HttpGet("notifications")]
+    public async Task<IActionResult> Notifications([FromQuery] int take = 8, CancellationToken cancellationToken = default)
+    {
+        var userName = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        if (string.IsNullOrWhiteSpace(userName)) return Unauthorized();
+
+        var connectedTenants = await _tenantCatalog.GetUserTenantsAsync(userName, cancellationToken);
+        if (connectedTenants.Count == 0)
+            return Ok(Array.Empty<TenantAlertNotification>());
+
+        var notifications = new List<TenantAlertNotification>();
+
+        foreach (var tenant in connectedTenants)
+        {
+            var threats = await _telemetry.GetThreatLogsAsync(tenant.TenantId, cancellationToken);
+            notifications.AddRange(threats
+                .Where(x => x.Severity >= (int)SeverityLevel.High)
+                .Select(x => new TenantAlertNotification(
+                    tenant.TenantId,
+                    tenant.TenantName,
+                    "ThreatLog",
+                    x.AttackType,
+                    x.Severity,
+                    x.SourceIp,
+                    x.RequestPath,
+                    $"{x.AttackType} was seen {x.HitCount} times from {x.SourceIp}.",
+                    x.LastSeenAt)));
+
+            var audits = await _telemetry.GetAuditEntriesAsync(tenant.TenantId, null, cancellationToken);
+            notifications.AddRange(audits
+                .Where(x => x.Severity >= (int)SeverityLevel.High)
+                .Select(x => new TenantAlertNotification(
+                    tenant.TenantId,
+                    tenant.TenantName,
+                    "SecurityAuditEvent",
+                    x.EventType,
+                    x.Severity,
+                    x.SourceIp,
+                    x.RequestPath,
+                    x.Details ?? x.EventType,
+                    x.OccurredAt)));
+        }
+
+        var result = notifications
+            .OrderByDescending(x => x.OccurredAt)
+            .Take(Math.Max(1, take))
+            .ToList();
+
+        return Ok(result);
+    }
+
+    public sealed record TenantAlertNotification(
+        Guid TenantId,
+        string TenantName,
+        string RecordType,
+        string EventType,
+        int Severity,
+        string? SourceIp,
+        string RequestPath,
+        string Details,
+        DateTime OccurredAt);
 }

@@ -3,29 +3,59 @@
 @inject UI.Services.TalonApiClient Api
 @inject NavigationManager Navigation
 
-<h1>Threat logs</h1>
+<h1>Threats & security audit</h1>
 @if (!Api.IsLoggedIn)
 {
     <p>Log in to view tenant threat logs.</p><a class="btn btn-primary" href="/login">Log in</a>
 }
-else if (loading) { <p>Loading threat logs...</p> }
+else if (loading) { <p>Loading timeline...</p> }
 else if (error is not null) { <div class="alert alert-danger">@error</div> }
 else
 {
     <div class="card mb-3"><div class="card-body"><strong>Tenant:</strong> @Api.CurrentTenantName<br /><strong>Role:</strong> @Api.CurrentTenantRole</div></div>
-    <div class="row g-2 mb-3">
+    <div class="row g-2 mb-3 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label">Filter</label>
+            <select class="form-select" @bind="selectedFilter">
+                <option value="all">All</option>
+                <option value="threats">Threats only</option>
+                <option value="audit">Security audit only</option>
+                <option value="high-critical">High + critical only</option>
+            </select>
+        </div>
         <div class="col-md-3"><label class="form-label">Since</label><InputDate class="form-control" @bind-Value="sinceDate" /></div>
-        <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary" @onclick="LoadAsync">Apply filter</button></div>
+        <div class="col-md-2"><button class="btn btn-primary" @onclick="LoadAsync">Apply filter</button></div>
     </div>
-    @if (threats.Count == 0) { <p>No threat logs for this tenant.</p> }
+    @if (timeline.Count == 0) { <p>No matching threat or audit events for this tenant.</p> }
     else
     {
-        <table class="table table-striped"><thead><tr><th>Last seen</th><th>Severity</th><th>Attack type</th><th>Source IP</th><th>Request path</th><th>Hit count</th><th>Country</th></tr></thead><tbody>
-        @foreach (var threat in threats)
-        {
-            <tr><td>@threat.LastSeenAt.ToLocalTime()</td><td>@SeverityName(threat.Severity)</td><td>@threat.AttackType</td><td>@threat.SourceIp</td><td>@threat.RequestPath</td><td>@threat.HitCount</td><td>@threat.CountryCode</td></tr>
-        }
-        </tbody></table>
+        <table class="table table-striped table-hover">
+            <thead>
+                <tr>
+                    <th>When</th>
+                    <th>Type</th>
+                    <th>Severity</th>
+                    <th>Event</th>
+                    <th>Source IP</th>
+                    <th>Request path</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var item in timeline)
+            {
+                <tr>
+                    <td>@item.OccurredAt.ToLocalTime()</td>
+                    <td><span class="badge bg-secondary">@item.RecordType</span></td>
+                    <td><span class="badge @SeverityClass(item.Severity)">@SeverityName(item.Severity)</span></td>
+                    <td>@item.EventType</td>
+                    <td>@(string.IsNullOrWhiteSpace(item.SourceIp) ? "-" : item.SourceIp)</td>
+                    <td>@(string.IsNullOrWhiteSpace(item.RequestPath) ? "-" : item.RequestPath)</td>
+                    <td>@(string.IsNullOrWhiteSpace(item.Details) ? "-" : item.Details)</td>
+                </tr>
+            }
+            </tbody>
+        </table>
     }
 }
 
@@ -33,7 +63,8 @@ else
     private bool loading = true;
     private string? error;
     private DateTime? sinceDate;
-    private IReadOnlyList<UI.Services.TalonApiClient.ThreatLogView> threats = Array.Empty<UI.Services.TalonApiClient.ThreatLogView>();
+    private string selectedFilter = "all";
+    private IReadOnlyList<UI.Services.TalonApiClient.TimelineItem> timeline = Array.Empty<UI.Services.TalonApiClient.TimelineItem>();
     private bool restored;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -51,8 +82,19 @@ else
         error = null;
         try
         {
-            threats = await Api.GetThreatLogsAsync(sinceDate?.Date)
-                ?? throw new InvalidOperationException("Threat-log request failed.");
+            var items = await Api.GetTimelineAsync(MapFilter(selectedFilter), sinceDate?.Date)
+                ?? throw new InvalidOperationException("Threat-log timeline request failed.");
+
+            timeline = items
+                .Where(x => selectedFilter switch
+                {
+                    "threats" => x.RecordType == "ThreatLog",
+                    "audit" => x.RecordType == "SecurityAuditEvent",
+                    "high-critical" => x.Severity >= 2,
+                    _ => true
+                })
+                .OrderByDescending(x => x.OccurredAt)
+                .ToList();
         }
         catch (Exception ex)
         {
@@ -62,12 +104,20 @@ else
                 Navigation.NavigateTo("/login", forceLoad: true);
                 return;
             }
-            error = $"Could not load threat logs ({ex.GetType().Name}). Reload the page or log in again.";
-            threats = Array.Empty<UI.Services.TalonApiClient.ThreatLogView>();
+            error = $"Could not load the threat timeline ({ex.GetType().Name}). Reload the page or log in again.";
+            timeline = Array.Empty<UI.Services.TalonApiClient.TimelineItem>();
         }
         loading = false;
         await InvokeAsync(StateHasChanged);
     }
 
+    private static string MapFilter(string selectedFilter) => selectedFilter switch
+    {
+        "threats" => "threat",
+        "audit" => "audit",
+        _ => "all"
+    };
+
     private static string SeverityName(int value) => value switch { 0 => "Low", 1 => "Medium", 2 => "High", 3 => "Critical", _ => value.ToString() };
+    private static string SeverityClass(int value) => value switch { 0 => "bg-secondary", 1 => "bg-info", 2 => "bg-warning text-dark", 3 => "bg-danger", _ => "bg-secondary" };
 }

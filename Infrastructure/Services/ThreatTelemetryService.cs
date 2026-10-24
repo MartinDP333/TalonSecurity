@@ -30,7 +30,7 @@ public sealed class ThreatTelemetryService : IThreatTelemetryService
             .ToListAsync(ct);
 
     public async Task<IReadOnlyList<AuditEntry>> GetAuditEntriesAsync(Guid tenantId, DateTime? since = null, CancellationToken ct = default)
-        => await _db.SecurityAuditEvents.AsNoTracking()
+        => await _db.SecurityAuditEvents.IgnoreQueryFilters().AsNoTracking()
             .Where(x => x.TenantId == tenantId && (!since.HasValue || x.OccurredAt >= since.Value))
             .OrderByDescending(x => x.OccurredAt)
             .Select(x => new AuditEntry(
@@ -50,7 +50,7 @@ public sealed class ThreatTelemetryService : IThreatTelemetryService
 
         if (type is "all" or "threat")
         {
-            var threats = await _db.ThreatLogs.AsNoTracking()
+            var threats = await _db.ThreatLogs.IgnoreQueryFilters().AsNoTracking()
                 .Where(x => x.TenantId == tenantId && (!since.HasValue || x.LastSeenAt >= since.Value))
                 .Select(x => new TimelineEntry(
                     x.Id,
@@ -69,7 +69,7 @@ public sealed class ThreatTelemetryService : IThreatTelemetryService
 
         if (type is "all" or "audit")
         {
-            var auditEvents = await _db.SecurityAuditEvents.AsNoTracking()
+            var auditEvents = await _db.SecurityAuditEvents.IgnoreQueryFilters().AsNoTracking()
                 .Where(x => x.TenantId == tenantId && (!since.HasValue || x.OccurredAt >= since.Value))
                 .Select(x => new TimelineEntry(
                     x.Id,
