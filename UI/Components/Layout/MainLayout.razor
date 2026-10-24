@@ -1,6 +1,7 @@
 ﻿@using System.Text.Json
 @using Microsoft.JSInterop
 @inherits LayoutComponentBase
+@implements IDisposable
 @inject UI.Services.TalonApiClient Api
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
@@ -93,17 +94,38 @@
 
     private int UnreadCount => notifications.Count(IsUnread);
 
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += HandleLocationChanged;
+    }
+
+    private async void HandleLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        await RefreshAuthAndAlertsAsync();
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender) return;
+        if (firstRender)
+        {
+            await RefreshAuthAndAlertsAsync();
+            authReady = true;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task RefreshAuthAndAlertsAsync()
+    {
         await Api.RestoreAuthAsync();
-        authReady = true;
         if (Api.IsLoggedIn)
         {
             await LoadReadStateAsync();
             await LoadNotificationsAsync();
+            return;
         }
-        await InvokeAsync(StateHasChanged);
+
+        notifications = Array.Empty<UI.Services.TalonApiClient.PriorityNotification>();
+        readNotifications = new HashSet<string>();
     }
 
     private async Task LoadReadStateAsync()
@@ -174,4 +196,9 @@
     private static string SeverityClass(int value) => value switch { 0 => "bg-secondary", 1 => "bg-info", 2 => "bg-warning text-dark", 3 => "bg-danger", _ => "bg-secondary" };
 
     private void GoHome() => Navigation.NavigateTo("/", replace: false);
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= HandleLocationChanged;
+    }
 }

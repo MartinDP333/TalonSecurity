@@ -68,7 +68,7 @@ public sealed class AuthController : ControllerBase
         var userName = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
         if (string.IsNullOrWhiteSpace(userName)) return Unauthorized();
 
-        var user = await _authentication.ValidateUserAsync(userName, string.Empty, ct);
+        var user = await _authentication.GetUserByNameAsync(userName, ct);
         if (user is null)
         {
             var username = User.Identity?.Name ?? userName;
