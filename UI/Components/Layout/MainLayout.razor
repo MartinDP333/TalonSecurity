@@ -1,4 +1,4 @@
-﻿@using System.Text.Json
+@using System.Text.Json
 @using Microsoft.JSInterop
 @inherits LayoutComponentBase
 @implements IDisposable
@@ -58,7 +58,7 @@
                     </ul>
                 </div>
 
-                <span class="text-light">@Api.CurrentTenantName</span>
+                <span class="text-light">@Api.CurrentTenantName · site: @Api.ProtectedSiteHostname</span>
                 <a class="nav-link text-light" href="/" @onclick:preventDefault @onclick="GoHome">Tenants</a>
                 <a class="nav-link text-light" href="/webshop">Webshop</a>
                 <a class="nav-link text-light" href="/banking">Banking</a>
@@ -119,6 +119,7 @@
         await Api.RestoreAuthAsync();
         if (Api.IsLoggedIn)
         {
+            await Api.GetConnectedTenantsAsync();
             await LoadReadStateAsync();
             await LoadNotificationsAsync();
             return;

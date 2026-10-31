@@ -8,13 +8,16 @@ else if (!Api.IsLoggedIn) { <a class="btn btn-primary" href="/login">Log in</a> 
 else if (tenants is null) { <div class="alert alert-danger">Unable to load your connected tenants.</div> }
 else
 {
+    <div class="alert alert-info">Protected site: <strong>@Api.ProtectedSiteHostname</strong> · WAF/rate-limit tenant: <strong>@Api.ProtectedSiteTenantName</strong> (@Api.ProtectedSiteTenantId)</div>
+    <div class="alert alert-secondary">Selected application tenant: <strong>@Api.CurrentTenantName</strong> (@Api.CurrentTenantId)</div>
     <h2>Connected tenants</h2>
     <div class="list-group">
         @foreach (var tenant in tenants)
         {
             <button class="list-group-item list-group-item-action" @onclick="() => Switch(tenant.TenantName)">
                 @tenant.TenantName <span class="badge bg-secondary">@tenant.Role</span>
-                @if (tenant.TenantName == Api.CurrentTenantName) { <span class="badge bg-success">Current</span> }
+                @if (tenant.TenantId.ToString() == Api.CurrentTenantId) { <span class="badge bg-success">Selected app tenant</span> }
+                @if (tenant.TenantId.ToString() == Api.ProtectedSiteTenantId) { <span class="badge bg-info text-dark">Protected site</span> }
             </button>
         }
     </div>

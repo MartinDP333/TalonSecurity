@@ -19,10 +19,8 @@ spec:
         ports:
         - containerPort: 8080
         env:
-        - name: ASPNETCORE_ENVIRONMENT
-          value: Development
         - name: TenantResolution__AllowHeaderForTesting
-          value: "true"
+          value: "false"
         - name: TenantResolution__UseProtectedSites
           value: "true"
         - name: JWT_KEY

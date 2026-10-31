@@ -63,7 +63,12 @@ else
         loading = true; error = null; tenants = await Api.GetAvailableTenantsAsync(model.UserName, model.Password); loading = false;
         if (tenants is null) error = "Invalid username or password.";
         else if (tenants.Count == 0) error = "This account has no active tenant memberships.";
-        else selectedTenant = tenants[0].TenantName;
+        else
+        {
+            var hostname = new Uri(Navigation.Uri).Host;
+            selectedTenant = tenants.FirstOrDefault(tenant => string.Equals(tenant.Hostname, hostname, StringComparison.OrdinalIgnoreCase))?.TenantName
+                ?? tenants[0].TenantName;
+        }
     }
 
     private async Task LoginAsync()

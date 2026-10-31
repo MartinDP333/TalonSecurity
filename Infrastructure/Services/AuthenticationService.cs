@@ -34,9 +34,13 @@ public sealed class AuthenticationService : IAuthenticationService
         return user;
     }
 
-    public async Task<TenantMembership?> GetActiveMembershipAsync(Guid userId, string tenantName, CancellationToken ct = default)
+public async Task<TenantMembership?> GetActiveMembershipAsync(Guid userId, string tenantName, CancellationToken ct = default)
         => await _db.TenantMemberships.IgnoreQueryFilters().Include(x => x.Tenant)
             .SingleOrDefaultAsync(x => x.UserAccountId == userId && x.Tenant.Name == tenantName && x.IsActive, ct);
+
+    public Task<bool> HasActiveMembershipAsync(Guid userId, Guid tenantId, CancellationToken ct = default)
+        => _db.TenantMemberships.IgnoreQueryFilters().AsNoTracking()
+            .AnyAsync(m => m.UserAccountId == userId && m.TenantId == tenantId && m.IsActive, ct);
 
     public async Task<IReadOnlyList<TenantMembershipSummary>> GetAvailableTenantsAsync(string userName, string password, CancellationToken ct = default)
     {
@@ -63,29 +67,35 @@ public sealed class AuthenticationService : IAuthenticationService
         }).ToList();
     }
 
-    public async Task<TokenResult> CreateTokenAsync(UserAccount user, TenantMembership membership)
+public async Task<TokenResult> CreateTokenAsync(UserAccount user, TenantMembership membership, string hostname, Guid siteTenantId)
     {
         var key = _configuration["Jwt:Key"] ?? Environment.GetEnvironmentVariable("JWT_KEY") ?? throw new InvalidOperationException("JWT_KEY is missing.");
-        var claims = new[]
+        hostname = NormalizeHostname(hostname);
+        if (string.IsNullOrWhiteSpace(hostname) || siteTenantId == Guid.Empty)
+            throw new InvalidOperationException("A registered protected-site hostname and tenant are required to issue a token.");
+
+        var registeredSiteTenantId = await _db.ProtectedSites.IgnoreQueryFilters().AsNoTracking()
+            .Where(site => site.IsEnabled && site.Hostname == hostname)
+            .Select(site => (Guid?)site.TenantId)
+            .SingleOrDefaultAsync();
+        if (registeredSiteTenantId != siteTenantId)
+            throw new InvalidOperationException("The protected-site hostname does not match its registered tenant.");
+
+        var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, user.UserName),
-            new Claim(ClaimTypes.NameIdentifier, user.UserName),
-            new Claim("tenant_id", membership.TenantId.ToString()),
-            new Claim("role", membership.Role)
+            new(JwtRegisteredClaimNames.Sub, user.UserName),
+            new(ClaimTypes.NameIdentifier, user.UserName),
+            new("tenant_id", membership.TenantId.ToString()),
+            new("role", membership.Role),
+            new("hostname", hostname),
+            new("site_tenant_id", siteTenantId.ToString())
         };
 
         if (user.IsPlatformAdmin)
-        {
-            claims = claims.Append(new Claim("role", "PlatformAdmin")).ToArray();
-        }
+            claims.Add(new Claim("role", "PlatformAdmin"));
 
         var credentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)), SecurityAlgorithms.HmacSha256);
         var token = new JwtSecurityToken(claims: claims, expires: DateTime.UtcNow.AddHours(8), signingCredentials: credentials);
-        var hostname = await _db.ProtectedSites.IgnoreQueryFilters().AsNoTracking()
-            .Where(site => site.IsEnabled && site.TenantId == membership.TenantId)
-            .OrderBy(site => site.Hostname)
-            .Select(site => site.Hostname)
-            .FirstOrDefaultAsync();
 
         return new TokenResult(
             new JwtSecurityTokenHandler().WriteToken(token),
@@ -93,6 +103,17 @@ public sealed class AuthenticationService : IAuthenticationService
             membership.Tenant.Name,
             membership.Role,
             user.IsPlatformAdmin,
-            hostname);
+            hostname,
+            siteTenantId);
+    }
+
+    private static string NormalizeHostname(string hostname)
+    {
+        var normalized = hostname.Trim();
+        if (Uri.TryCreate(normalized, UriKind.Absolute, out var uri))
+            normalized = uri.Host;
+        else if (normalized.Contains(':'))
+            normalized = normalized[..normalized.LastIndexOf(':')];
+        return normalized.TrimEnd('.').ToLowerInvariant();
     }
 }

@@ -21,11 +21,10 @@ public sealed class ThreatLogsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Get(CancellationToken cancellationToken)
     {
-        var tenantClaim = User.FindFirstValue("tenant_id");
-        if (!Guid.TryParse(tenantClaim, out var tenantId) || tenantId == Guid.Empty || _tenant.TenantId != tenantId)
+        if (!_tenant.TenantId.HasValue || _tenant.TenantId.Value == Guid.Empty)
             return Forbid();
 
-        var logs = await _telemetry.GetThreatLogsAsync(tenantId, cancellationToken);
+        var logs = await _telemetry.GetThreatLogsAsync(_tenant.TenantId.Value, cancellationToken);
         return Ok(logs);
     }
 

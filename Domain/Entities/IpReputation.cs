@@ -57,9 +57,12 @@ public class IpReputation : BaseEntity
 
         TimeSpan penaltyDuration = TotalIncidents switch
         {
-            <= 2 => TimeSpan.FromMinutes(15),
-            <= 5 => TimeSpan.FromHours(1),
-            _ => TimeSpan.FromHours(24)
+            <= 2 => TimeSpan.FromSeconds(15),
+            <= 5 => TimeSpan.FromSeconds(15),
+            _ => TimeSpan.FromSeconds(15)
+            //<= 2 => TimeSpan.FromMinutes(15),
+            //<= 5 => TimeSpan.FromHours(1),
+            //_ => TimeSpan.FromHours(24)
         };
 
         BlockedUntil = DateTime.UtcNow.Add(penaltyDuration);

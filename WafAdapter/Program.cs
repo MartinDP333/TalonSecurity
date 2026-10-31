@@ -86,8 +86,8 @@ public sealed class WafAuditParser : IWafAuditParser
         var host = hostName.Split(':')[0].Trim().ToLowerInvariant();
         return host switch
         {
-            "alpha.talon.test" => "Talon Security Alpha",
-            "beta.talon.test" => "Talon Security Beta",
+            "webshop.talon.test" => "Talon Security Alpha",
+            "bank.talon.test" => "Talon Security Beta",
             _ => ""
         };
     }

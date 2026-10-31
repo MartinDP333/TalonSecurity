@@ -34,7 +34,7 @@ public class TrafficEventConsumer : IConsumer<TrafficEvent>
     {
         var data = context.Message;
         var db = _redis.GetDatabase();
-        var tenantId = data.TenantId;
+        var tenantId = data.SiteTenantId ?? data.TenantId;
         if (!tenantId.HasValue && !string.IsNullOrWhiteSpace(data.Hostname))
         {
             tenantId = await _dbContext.ProtectedSites.IgnoreQueryFilters().AsNoTracking()
@@ -49,7 +49,7 @@ public class TrafficEventConsumer : IConsumer<TrafficEvent>
         if (requestCount == 1)
             await db.KeyExpireAsync(redisKey, TimeSpan.FromSeconds(60));
 
-        var isSuspicious = requestCount > 10;
+        var isSuspicious = requestCount > 60;
         _logger.LogInformation(
             "[REDIS CHECK] IP: {IpAddress} | Antal requests (sidste minut): {RequestCount} | Mistænkelig: {IsSuspicious}",
             data.IpAddress, requestCount, isSuspicious);

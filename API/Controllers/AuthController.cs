@@ -58,8 +58,13 @@ public sealed class AuthController : ControllerBase
             return Unauthorized("No active membership exists for this tenant.");
         }
 
-        await _audit.WriteAsync("LoginSuccess", "Authentication", $"Tenant: {membership.Tenant.Name}", StatusCodes.Status200OK, user.UserName, membership.TenantId, ct);
-        return Ok(await _authentication.CreateTokenAsync(user, membership));
+        var protectedHostname = Request.Host.Host;
+        var siteTenantId = await _protectedSites.ResolveTenantIdByHostnameAsync(protectedHostname);
+        if (string.IsNullOrWhiteSpace(protectedHostname) || !siteTenantId.HasValue)
+            return BadRequest("Login must target an enabled protected-site hostname.");
+
+        await _audit.WriteAsync("LoginSuccess", "Authentication", $"Tenant: {membership.Tenant.Name}; protected site: {protectedHostname}", StatusCodes.Status200OK, user.UserName, membership.TenantId, ct);
+        return Ok(await _authentication.CreateTokenAsync(user, membership, protectedHostname, siteTenantId.Value));
     }
 
     [HttpPost("switch-tenant")]
@@ -81,7 +86,16 @@ public sealed class AuthController : ControllerBase
         if (membership is null)
             return Forbid();
 
-        return Ok(await _authentication.CreateTokenAsync(user, membership));
+        var protectedHostname = User.FindFirstValue("hostname");
+        if (string.IsNullOrWhiteSpace(protectedHostname)
+            || !string.Equals(protectedHostname, Request.Host.Host, StringComparison.OrdinalIgnoreCase))
+            return Forbid();
+
+        var siteTenantId = await _protectedSites.ResolveTenantIdByHostnameAsync(protectedHostname);
+        if (!siteTenantId.HasValue)
+            return Forbid();
+
+        return Ok(await _authentication.CreateTokenAsync(user, membership, protectedHostname, siteTenantId.Value));
     }
 
     [HttpPost("available-tenants")]

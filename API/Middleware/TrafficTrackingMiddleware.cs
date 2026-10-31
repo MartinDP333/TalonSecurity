@@ -29,6 +29,10 @@ public class TrafficTrackingMiddleware
             {
                 IpAddress = ipAddress,
                 TenantId = tenant.TenantId,
+                SiteTenantId = context.Items.TryGetValue("SiteTenantId", out var siteTenantId)
+                    && siteTenantId is Guid resolvedSiteTenantId
+                        ? resolvedSiteTenantId
+                        : tenant.TenantId,
                 Hostname = context.Request.Host.Host,
                 Endpoint = context.Request.Path,
                 UserAgent = context.Request.Headers.UserAgent.ToString() ?? "Ukendt",

@@ -34,7 +34,10 @@ public class IpBlockingMiddleware
         {
             using var scope = _scopeFactory.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<SecurityDbContext>();
-            var tenantId = tenantService.TenantId;
+            var tenantId = context.Items.TryGetValue("SiteTenantId", out var siteTenantId)
+                && siteTenantId is Guid resolvedSiteTenantId
+                    ? resolvedSiteTenantId
+                    : tenantService.TenantId;
             var reputation = await dbContext.IpReputations
                 .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(r => r.IpAddress == ipAddress && r.TenantId == tenantId);

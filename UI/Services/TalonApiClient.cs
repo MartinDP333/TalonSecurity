@@ -9,6 +9,7 @@ public sealed class TalonApiClient
     private readonly IHttpClientFactory _factory;
     private readonly UiAuthState _auth;
     private readonly NavigationManager _navigationManager;
+    private AvailableTenant? _siteTenant;
 
     public TalonApiClient(IHttpClientFactory factory, UiAuthState auth, NavigationManager navigationManager)
         => (_factory, _auth, _navigationManager) = (factory, auth, navigationManager);
@@ -32,7 +33,18 @@ public sealed class TalonApiClient
         if (!string.IsNullOrWhiteSpace(hostname)) client.DefaultRequestHeaders.Host = hostname;
         else SetTenantHost(client);
         var response = await client.GetAsync("api/tenants", ct);
-        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<List<AvailableTenant>>(cancellationToken: ct) : null;
+        if (!response.IsSuccessStatusCode)
+        {
+            _siteTenant = null;
+            return null;
+        }
+
+        var tenants = await response.Content.ReadFromJsonAsync<List<AvailableTenant>>(cancellationToken: ct);
+        var activeHostname = (hostname ?? HostnameForRequest())?.Trim().TrimEnd('.');
+        _siteTenant = tenants?.FirstOrDefault(tenant =>
+            !string.IsNullOrWhiteSpace(tenant.Hostname)
+            && string.Equals(tenant.Hostname.Trim().TrimEnd('.'), activeHostname, StringComparison.OrdinalIgnoreCase));
+        return tenants;
     }
 
     public async Task<CartResult?> AddCartItemAsync(string item, CancellationToken ct = default)
@@ -291,6 +303,9 @@ public sealed class TalonApiClient
     public string? CurrentTenantName => _auth.TenantName;
     public string? CurrentTenantId => _auth.TenantId?.ToString();
     public string? CurrentTenantRole => _auth.Role;
+    public string? ProtectedSiteTenantName => _siteTenant?.TenantName;
+    public string? ProtectedSiteTenantId => _auth.SiteTenantId?.ToString() ?? _siteTenant?.TenantId.ToString();
+    public string? ProtectedSiteHostname => _auth.ProtectedSiteHostname;
     public bool IsPlatformAdmin => _auth.IsPlatformAdmin;
 
     private async Task<bool> AdminPost(string path, object body, CancellationToken ct)
@@ -318,7 +333,7 @@ public sealed class TalonApiClient
     public sealed record AdminMembership(Guid TenantId, string TenantName, string UserName, string Role, bool IsActive);
     public sealed record AvailableTenant(Guid TenantId, string TenantName, string Role, string? Hostname = null);
     public sealed record MemberView(string UserName, string Role, bool IsActive, Guid TenantId);
-    public sealed record LoginResponse(string AccessToken, Guid TenantId, string TenantName, string Role, bool IsPlatformAdmin, string? Hostname = null);
+    public sealed record LoginResponse(string AccessToken, Guid TenantId, string TenantName, string Role, bool IsPlatformAdmin, string? Hostname = null, Guid SiteTenantId = default);
     public sealed record TimelineItem(Guid Id, string RecordType, DateTime OccurredAt, string EventType, string? SourceIp, string RequestPath, int Severity, int? HitCount, string? Details);
     public sealed record PriorityNotification(Guid TenantId, string TenantName, string RecordType, string EventType, int Severity, string? SourceIp, string RequestPath, string Details, DateTime OccurredAt);
     public sealed record ThreatLogView(Guid Id, string SourceIp, string RequestPath, string AttackType, int Severity, int HitCount, DateTime FirstSeenAt, DateTime LastSeenAt, string CountryCode);

@@ -11,6 +11,7 @@ public sealed class UiAuthState
     public string? TenantName { get; private set; }
     public string? Role { get; private set; }
     public string? ProtectedSiteHostname { get; private set; }
+    public Guid? SiteTenantId { get; private set; }
     public bool IsPlatformAdmin { get; private set; }
     public bool IsLoggedIn => !string.IsNullOrWhiteSpace(AccessToken);
 
@@ -23,8 +24,9 @@ public sealed class UiAuthState
         TenantName = result.TenantName;
         Role = result.Role;
         ProtectedSiteHostname = result.Hostname;
+        SiteTenantId = result.SiteTenantId == Guid.Empty ? null : result.SiteTenantId;
         IsPlatformAdmin = result.IsPlatformAdmin;
-        await _js.InvokeVoidAsync("localStorage.setItem", StorageKey, string.Join("|", AccessToken, TenantId, TenantName, Role, IsPlatformAdmin, ProtectedSiteHostname ?? string.Empty));
+        await _js.InvokeVoidAsync("localStorage.setItem", StorageKey, string.Join("|", AccessToken, TenantId, TenantName, Role, IsPlatformAdmin, ProtectedSiteHostname ?? string.Empty, SiteTenantId?.ToString() ?? string.Empty));
     }
 
     public async Task RestoreAsync()
@@ -40,12 +42,13 @@ public sealed class UiAuthState
             Role = parts[3];
             IsPlatformAdmin = bool.TryParse(parts[4], out var admin) && admin;
             ProtectedSiteHostname = parts.Length >= 6 ? parts[5] : null;
+            SiteTenantId = parts.Length >= 7 && Guid.TryParse(parts[6], out var siteTenantId) ? siteTenantId : null;
         }
     }
 
     public async Task ClearAsync()
     {
-        AccessToken = null; TenantId = null; TenantName = null; Role = null; ProtectedSiteHostname = null; IsPlatformAdmin = false;
+        AccessToken = null; TenantId = null; TenantName = null; Role = null; ProtectedSiteHostname = null; SiteTenantId = null; IsPlatformAdmin = false;
         await _js.InvokeVoidAsync("localStorage.removeItem", StorageKey);
     }
 }
