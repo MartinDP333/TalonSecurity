@@ -11,5 +11,5 @@ public interface IAuthenticationService
     Task<TokenResult> CreateTokenAsync(UserAccount user, TenantMembership membership);
 }
 
-public sealed record TenantMembershipSummary(Guid TenantId, string TenantName, string Role);
-public sealed record TokenResult(string AccessToken, Guid TenantId, string TenantName, string Role, bool IsPlatformAdmin);
+public sealed record TenantMembershipSummary(Guid TenantId, string TenantName, string Role, string? Hostname = null);
+public sealed record TokenResult(string AccessToken, Guid TenantId, string TenantName, string Role, bool IsPlatformAdmin, string? Hostname = null);

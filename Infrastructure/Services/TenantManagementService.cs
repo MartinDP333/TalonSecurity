@@ -120,10 +120,25 @@ public sealed class TenantManagementService : IPlatformAdminService, ITenantCata
     }
 
     public async Task<IReadOnlyList<UserTenantListItem>> GetUserTenantsAsync(string userName, CancellationToken ct = default)
-        => await _db.TenantMemberships.IgnoreQueryFilters()
+    {
+        var memberships = await _db.TenantMemberships.IgnoreQueryFilters()
             .Where(m => m.UserAccount.UserName == userName && m.IsActive)
+            .OrderBy(m => m.Tenant.Name)
             .Select(m => new UserTenantListItem(m.TenantId, m.Tenant.Name, m.Role))
             .ToListAsync(ct);
+
+        var tenantIds = memberships.Select(x => x.TenantId).ToList();
+        var sites = await _db.ProtectedSites.IgnoreQueryFilters().AsNoTracking()
+            .Where(site => site.IsEnabled && tenantIds.Contains(site.TenantId))
+            .OrderBy(site => site.Hostname)
+            .Select(site => new { site.TenantId, site.Hostname })
+            .ToListAsync(ct);
+
+        return memberships.Select(membership => membership with
+        {
+            Hostname = sites.FirstOrDefault(site => site.TenantId == membership.TenantId)?.Hostname
+        }).ToList();
+    }
 
     public async Task<TenantDetail?> GetCurrentTenantAsync(Guid tenantId, CancellationToken ct = default)
         => await _db.Tenants.IgnoreQueryFilters()

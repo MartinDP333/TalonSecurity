@@ -1,4 +1,5 @@
-﻿using System.Net.Http.Headers;
+using Microsoft.AspNetCore.Components;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 
 namespace UI.Services;
@@ -7,21 +8,31 @@ public sealed class TalonApiClient
 {
     private readonly IHttpClientFactory _factory;
     private readonly UiAuthState _auth;
+    private readonly NavigationManager _navigationManager;
 
-    public TalonApiClient(IHttpClientFactory factory, UiAuthState auth) => (_factory, _auth) = (factory, auth);
+    public TalonApiClient(IHttpClientFactory factory, UiAuthState auth, NavigationManager navigationManager)
+        => (_factory, _auth, _navigationManager) = (factory, auth, navigationManager);
 
-    public async Task<IReadOnlyList<AvailableTenant>?> GetAvailableTenantsAsync(string u, string p, CancellationToken ct = default)
+    public async Task<IReadOnlyList<AvailableTenant>?> GetAvailableTenantsAsync(string u, string p, string? hostname = null, CancellationToken ct = default)
     {
-        var r = await _factory.CreateClient("TalonApi").PostAsJsonAsync("api/auth/available-tenants", new { userName = u, password = p }, ct);
-        return r.IsSuccessStatusCode ? await r.Content.ReadFromJsonAsync<List<AvailableTenant>>(cancellationToken: ct) : null;
+        var client = _factory.CreateClient("TalonApi");
+        hostname ??= HostnameForRequest();
+        if (!string.IsNullOrWhiteSpace(hostname)) client.DefaultRequestHeaders.Host = hostname;
+        var response = await client.PostAsJsonAsync("api/auth/available-tenants", new { userName = u, password = p, hostname }, ct);
+        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<List<AvailableTenant>>(cancellationToken: ct) : null;
     }
 
     public async Task<IReadOnlyList<AvailableTenant>?> GetConnectedTenantsAsync(CancellationToken ct = default)
+        => await GetConnectedTenantsAsync(null, ct);
+
+    public async Task<IReadOnlyList<AvailableTenant>?> GetConnectedTenantsAsync(string? hostname, CancellationToken ct = default)
     {
-        var c = Authenticated();
-        if (c is null) return null;
-        var r = await c.GetAsync("api/tenants", ct);
-        return r.IsSuccessStatusCode ? await r.Content.ReadFromJsonAsync<List<AvailableTenant>>(cancellationToken: ct) : null;
+        var client = Authenticated();
+        if (client is null) return null;
+        if (!string.IsNullOrWhiteSpace(hostname)) client.DefaultRequestHeaders.Host = hostname;
+        else SetTenantHost(client);
+        var response = await client.GetAsync("api/tenants", ct);
+        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<List<AvailableTenant>>(cancellationToken: ct) : null;
     }
 
     public async Task<CartResult?> AddCartItemAsync(string item, CancellationToken ct = default)
@@ -63,6 +74,19 @@ public sealed class TalonApiClient
         return await r.Content.ReadFromJsonAsync<BankingTransferResult>(cancellationToken: ct);
     }
 
+    public async Task<PlatformAdminOverview?> GetPlatformAdminOverviewAsync(CancellationToken ct = default)
+    {
+        var c = Authenticated();
+        if (c is null) return null;
+        using var r = await c.GetAsync("api/platform-admin/overview", ct);
+        if (!r.IsSuccessStatusCode)
+        {
+            await AuthFailedAsync(r);
+            return null;
+        }
+        return await r.Content.ReadFromJsonAsync<PlatformAdminOverview>(cancellationToken: ct);
+    }
+
     public async Task<IReadOnlyList<AdminUser>?> GetAdminUsersAsync(CancellationToken ct = default) => await GetAdminList<AdminUser>("api/platform-admin/users", ct);
     public async Task<IReadOnlyList<AdminTenant>?> GetAdminTenantsAsync(CancellationToken ct = default) => await GetAdminList<AdminTenant>("api/platform-admin/tenants", ct);
     public async Task<IReadOnlyList<AdminMembership>?> GetAdminMembershipsAsync(CancellationToken ct = default) => await GetAdminList<AdminMembership>("api/platform-admin/memberships", ct);
@@ -99,7 +123,7 @@ public sealed class TalonApiClient
     {
         var c = Authenticated();
         if (c is null) return false;
-        var r = await c.PutAsJsonAsync("api/platform-admin/memberships", new { tenantId, userName, role }, ct);
+        var r = await c.PostAsJsonAsync("api/platform-admin/memberships/update", new { tenantId, userName, role }, ct);
         if (!r.IsSuccessStatusCode) await AuthFailedAsync(r);
         return r.IsSuccessStatusCode;
     }
@@ -144,12 +168,17 @@ public sealed class TalonApiClient
         return r.IsSuccessStatusCode;
     }
 
-    public async Task<LoginResponse?> LoginAsync(string u, string p, string tenant, CancellationToken ct = default) => await Authenticate("api/auth/login", new { userName = u, password = p, tenantName = tenant }, ct);
-    public async Task<LoginResponse?> SwitchTenantAsync(string tenant, CancellationToken ct = default) => await Authenticate("api/auth/switch-tenant", new { tenantName = tenant }, ct);
+    public async Task<LoginResponse?> LoginAsync(string u, string p, string tenant, string? hostname = null, CancellationToken ct = default)
+        => await Authenticate("api/auth/login", new { userName = u, password = p, tenantName = tenant, hostname = hostname ?? HostnameForRequest() }, ct);
+
+    public async Task<LoginResponse?> SwitchTenantAsync(string tenant, string? hostname = null, CancellationToken ct = default)
+        => await Authenticate("api/auth/switch-tenant", new { tenantName = tenant, hostname = hostname ?? HostnameForRequest() }, ct);
 
     private async Task<LoginResponse?> Authenticate(string path, object body, CancellationToken ct)
     {
         var c = _factory.CreateClient("TalonApi");
+        var hostname = HostnameFromBody(body) ?? HostnameForRequest();
+        if (!string.IsNullOrWhiteSpace(hostname)) c.DefaultRequestHeaders.Host = hostname;
         if (path.Contains("switch"))
         {
             var t = _auth.AccessToken;
@@ -159,8 +188,40 @@ public sealed class TalonApiClient
         var r = await c.PostAsJsonAsync(path, body, ct);
         if (!r.IsSuccessStatusCode) return null;
         var x = await r.Content.ReadFromJsonAsync<LoginResponse>(cancellationToken: ct);
-        if (x is not null) await _auth.SetAsync(x);
+        if (x is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(hostname) && !string.Equals(hostname, x.Hostname, StringComparison.OrdinalIgnoreCase))
+                x = x with { Hostname = hostname };
+            await _auth.SetAsync(x);
+            if (!string.IsNullOrWhiteSpace(x.Hostname))
+                c.DefaultRequestHeaders.Host = x.Hostname;
+        }
         return x;
+    }
+
+    private static string? HostnameFromBody(object body)
+    {
+        var property = body.GetType().GetProperty("hostname");
+        return property?.GetValue(body) as string;
+    }
+
+    private string? HostnameForRequest()
+    {
+        if (Uri.TryCreate(_navigationManager.Uri, UriKind.Absolute, out var current)
+            && !string.IsNullOrWhiteSpace(current.Host)
+            && current.Host.EndsWith(".talon.test", StringComparison.OrdinalIgnoreCase))
+            return current.Host;
+
+        if (!string.IsNullOrWhiteSpace(_auth.ProtectedSiteHostname))
+            return _auth.ProtectedSiteHostname;
+
+        return null;
+    }
+
+    private void SetTenantHost(HttpClient client)
+    {
+        var hostname = HostnameForRequest() ?? _auth.ProtectedSiteHostname;
+        if (!string.IsNullOrWhiteSpace(hostname)) client.DefaultRequestHeaders.Host = hostname;
     }
 
     public async Task<IReadOnlyList<ThreatLogView>?> GetThreatLogsAsync(DateTime? since = null, CancellationToken ct = default)
@@ -247,15 +308,17 @@ public sealed class TalonApiClient
         if (string.IsNullOrWhiteSpace(t)) return null;
         var c = _factory.CreateClient("TalonApi");
         c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", t);
+        SetTenantHost(c);
         return c;
     }
 
+    public sealed record PlatformAdminOverview(IReadOnlyList<AdminUser> Users, IReadOnlyList<AdminTenant> Tenants, IReadOnlyList<AdminMembership> Memberships, IReadOnlyList<string> Roles);
     public sealed record AdminUser(Guid Id, string UserName, bool IsPlatformAdmin);
     public sealed record AdminTenant(Guid Id, string Name);
     public sealed record AdminMembership(Guid TenantId, string TenantName, string UserName, string Role, bool IsActive);
-    public sealed record AvailableTenant(Guid TenantId, string TenantName, string Role);
+    public sealed record AvailableTenant(Guid TenantId, string TenantName, string Role, string? Hostname = null);
     public sealed record MemberView(string UserName, string Role, bool IsActive, Guid TenantId);
-    public sealed record LoginResponse(string AccessToken, Guid TenantId, string TenantName, string Role, bool IsPlatformAdmin);
+    public sealed record LoginResponse(string AccessToken, Guid TenantId, string TenantName, string Role, bool IsPlatformAdmin, string? Hostname = null);
     public sealed record TimelineItem(Guid Id, string RecordType, DateTime OccurredAt, string EventType, string? SourceIp, string RequestPath, int Severity, int? HitCount, string? Details);
     public sealed record PriorityNotification(Guid TenantId, string TenantName, string RecordType, string EventType, int Severity, string? SourceIp, string RequestPath, string Details, DateTime OccurredAt);
     public sealed record ThreatLogView(Guid Id, string SourceIp, string RequestPath, string AttackType, int Severity, int HitCount, DateTime FirstSeenAt, DateTime LastSeenAt, string CountryCode);

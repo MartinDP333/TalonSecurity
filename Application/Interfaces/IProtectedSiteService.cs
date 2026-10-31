@@ -4,6 +4,7 @@ namespace Application.Interfaces;
 
 public interface IProtectedSiteService
 {
+    Task<string?> GetHostnameForTenantAsync(Guid tenantId, CancellationToken ct = default);
     Task<Guid?> ResolveTenantIdByHostnameAsync(string hostname, CancellationToken ct = default);
     Task<bool> IsHostnameRegisteredAsync(string hostname, CancellationToken ct = default);
     Task<IReadOnlyList<ProtectedSite>> ListForTenantAsync(Guid tenantId, CancellationToken ct = default);

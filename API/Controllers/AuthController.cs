@@ -12,10 +12,11 @@ public sealed class AuthController : ControllerBase
 {
     private readonly IAuthenticationService _authentication;
     private readonly IPlatformAdminService _platformAdmin;
+    private readonly IProtectedSiteService _protectedSites;
     private readonly SecurityAuditLogger _audit;
 
-    public AuthController(IAuthenticationService authentication, IPlatformAdminService platformAdmin, SecurityAuditLogger audit)
-        => (_authentication, _platformAdmin, _audit) = (authentication, platformAdmin, audit);
+    public AuthController(IAuthenticationService authentication, IPlatformAdminService platformAdmin, IProtectedSiteService protectedSites, SecurityAuditLogger audit)
+        => (_authentication, _platformAdmin, _protectedSites, _audit) = (authentication, platformAdmin, protectedSites, audit);
 
     [HttpPost("users")]
     [Authorize(Roles = "PlatformAdmin")]
@@ -77,7 +78,10 @@ public sealed class AuthController : ControllerBase
         }
 
         var membership = await _authentication.GetActiveMembershipAsync(user.Id, request.TenantName, ct);
-        return membership is null ? Forbid() : Ok(await _authentication.CreateTokenAsync(user, membership));
+        if (membership is null)
+            return Forbid();
+
+        return Ok(await _authentication.CreateTokenAsync(user, membership));
     }
 
     [HttpPost("available-tenants")]
@@ -88,12 +92,12 @@ public sealed class AuthController : ControllerBase
         if (membershipSummaries.Count == 0)
             return Unauthorized();
 
-        return Ok(membershipSummaries.Select(x => new { x.TenantId, TenantName = x.TenantName, x.Role }).ToList());
+        return Ok(membershipSummaries.Select(x => new { x.TenantId, TenantName = x.TenantName, x.Role, x.Hostname }).ToList());
     }
 
     public sealed record CreateUserRequest(string UserName, string Password, bool IsPlatformAdmin = false);
     public sealed record CreateTenantRequest(string TenantName, string OwnerUserName);
     public sealed record CredentialsRequest(string UserName, string Password);
-    public sealed record LoginRequest(string UserName, string Password, string TenantName);
-    public sealed record SwitchTenantRequest(string TenantName);
+    public sealed record LoginRequest(string UserName, string Password, string TenantName, string? Hostname = null);
+    public sealed record SwitchTenantRequest(string TenantName, string? Hostname = null);
 }

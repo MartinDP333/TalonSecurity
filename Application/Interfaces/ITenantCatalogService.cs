@@ -6,5 +6,5 @@ public interface ITenantCatalogService
     Task<TenantDetail?> GetCurrentTenantAsync(Guid tenantId, CancellationToken ct = default);
 }
 
-public sealed record UserTenantListItem(Guid TenantId, string TenantName, string Role);
+public sealed record UserTenantListItem(Guid TenantId, string TenantName, string Role, string? Hostname = null);
 public sealed record TenantDetail(Guid Id, string Name, DateTime CreatedAt);

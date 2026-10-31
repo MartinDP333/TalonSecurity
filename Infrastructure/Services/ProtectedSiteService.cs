@@ -14,6 +14,13 @@ public sealed class ProtectedSiteService : IProtectedSiteService
         _db = db;
     }
 
+    public async Task<string?> GetHostnameForTenantAsync(Guid tenantId, CancellationToken ct = default)
+        => await _db.ProtectedSites.IgnoreQueryFilters().AsNoTracking()
+            .Where(x => x.IsEnabled && x.TenantId == tenantId)
+            .OrderBy(x => x.Hostname)
+            .Select(x => x.Hostname)
+            .FirstOrDefaultAsync(ct);
+
     public async Task<Guid?> ResolveTenantIdByHostnameAsync(string hostname, CancellationToken ct = default)
     {
         var normalized = NormalizeHostname(hostname);
@@ -70,5 +77,20 @@ public sealed class ProtectedSiteService : IProtectedSiteService
     }
 
     private static string NormalizeHostname(string value)
-        => value?.Trim().ToLowerInvariant() ?? string.Empty;
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var normalized = value.Trim();
+        if (Uri.TryCreate(normalized, UriKind.Absolute, out var absolute))
+            normalized = absolute.Host;
+        else if (normalized.Contains(':', StringComparison.Ordinal))
+        {
+            var lastColon = normalized.LastIndexOf(':');
+            if (lastColon > normalized.LastIndexOf('/'))
+                normalized = normalized[..lastColon];
+        }
+
+        return normalized.Trim().TrimEnd('.').ToLowerInvariant();
+    }
 }

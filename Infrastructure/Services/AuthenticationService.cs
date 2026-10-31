@@ -44,14 +44,26 @@ public sealed class AuthenticationService : IAuthenticationService
         if (user is null)
             return Array.Empty<TenantMembershipSummary>();
 
-        return await _db.TenantMemberships.IgnoreQueryFilters()
+        var memberships = await _db.TenantMemberships.IgnoreQueryFilters()
             .Where(x => x.UserAccountId == user.Id && x.IsActive)
             .OrderBy(x => x.Tenant.Name)
             .Select(x => new TenantMembershipSummary(x.TenantId, x.Tenant.Name, x.Role))
             .ToListAsync(ct);
+
+        var tenantIds = memberships.Select(x => x.TenantId).ToList();
+        var sites = await _db.ProtectedSites.IgnoreQueryFilters().AsNoTracking()
+            .Where(site => site.IsEnabled && tenantIds.Contains(site.TenantId))
+            .OrderBy(site => site.Hostname)
+            .Select(site => new { site.TenantId, site.Hostname })
+            .ToListAsync(ct);
+
+        return memberships.Select(membership => membership with
+        {
+            Hostname = sites.FirstOrDefault(site => site.TenantId == membership.TenantId)?.Hostname
+        }).ToList();
     }
 
-    public Task<TokenResult> CreateTokenAsync(UserAccount user, TenantMembership membership)
+    public async Task<TokenResult> CreateTokenAsync(UserAccount user, TenantMembership membership)
     {
         var key = _configuration["Jwt:Key"] ?? Environment.GetEnvironmentVariable("JWT_KEY") ?? throw new InvalidOperationException("JWT_KEY is missing.");
         var claims = new[]
@@ -69,12 +81,18 @@ public sealed class AuthenticationService : IAuthenticationService
 
         var credentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)), SecurityAlgorithms.HmacSha256);
         var token = new JwtSecurityToken(claims: claims, expires: DateTime.UtcNow.AddHours(8), signingCredentials: credentials);
+        var hostname = await _db.ProtectedSites.IgnoreQueryFilters().AsNoTracking()
+            .Where(site => site.IsEnabled && site.TenantId == membership.TenantId)
+            .OrderBy(site => site.Hostname)
+            .Select(site => site.Hostname)
+            .FirstOrDefaultAsync();
 
-        return Task.FromResult(new TokenResult(
+        return new TokenResult(
             new JwtSecurityTokenHandler().WriteToken(token),
             membership.TenantId,
             membership.Tenant.Name,
             membership.Role,
-            user.IsPlatformAdmin));
+            user.IsPlatformAdmin,
+            hostname);
     }
 }
