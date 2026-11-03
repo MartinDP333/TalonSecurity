@@ -23,6 +23,21 @@ spec:
           value: "false"
         - name: TenantResolution__UseProtectedSites
           value: "true"
+        - name: Bootstrap__PlatformAdminPassword
+          valueFrom:
+            secretKeyRef:
+              name: talon-bootstrap
+              key: PLATFORM_ADMIN_PASSWORD
+        - name: Bootstrap__WebshopUserPassword
+          valueFrom:
+            secretKeyRef:
+              name: talon-bootstrap
+              key: WEBSHOP_USER_PASSWORD
+        - name: Bootstrap__BankUserPassword
+          valueFrom:
+            secretKeyRef:
+              name: talon-bootstrap
+              key: BANK_USER_PASSWORD
         - name: JWT_KEY
           valueFrom:
             secretKeyRef:

@@ -99,4 +99,6 @@ using (var scope = app.Services.CreateScope())
     await context.Database.MigrateAsync();
 }
 
+await BootstrapDataSeeder.SeedAsync(app.Services, app.Configuration, app.Logger);
+
 app.Run();
