@@ -54,3 +54,4 @@ public sealed class ProtectedSitesController : ControllerBase
 
     public sealed record AddSiteRequest(string Hostname, string OriginUrl);
 }
+ 
