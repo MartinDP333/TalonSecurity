@@ -69,6 +69,7 @@ public sealed class TenantResolutionMiddleware
         Guid tenantId;
         if (protectedSiteTenantId.HasValue)
         {
+            // The registered hostname determines the tenant for this request, not the JWT's selected tenant.
             tenantId = protectedSiteTenantId.Value;
         }
         else if (!string.IsNullOrWhiteSpace(claimValue))

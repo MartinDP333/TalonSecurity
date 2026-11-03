@@ -106,6 +106,8 @@ IF NOT EXISTS (SELECT 1 FROM dbo.Tenants WITH (UPDLOCK, HOLDLOCK) WHERE Id = {Sy
         }
         catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex) && reputation is not null)
         {
+            // Concurrent first requests can race to insert the same tenant/IP reputation.
+            // ThreatLogService has already persisted the rate-limit threat independently.
             _dbContext.Entry(reputation).State = EntityState.Detached;
             _logger.LogWarning("Concurrent IP reputation insert for tenant {TenantId}, IP {IpAddress}; rate-limit threat remains recorded.", resolvedTenantId, data.IpAddress);
         }
