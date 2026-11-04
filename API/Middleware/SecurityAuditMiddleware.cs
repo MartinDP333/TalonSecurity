@@ -35,13 +35,19 @@ public sealed class SecurityAuditMiddleware
         }
 
         var code = context.Response.StatusCode;
+        var auditTenantId = tenant.TenantId;
+        if (!auditTenantId.HasValue
+            && context.User.Identity?.IsAuthenticated == true
+            && Guid.TryParse(context.User.FindFirst("tenant_id")?.Value, out var claimedTenantId))
+            auditTenantId = claimedTenantId;
+
         if (code == StatusCodes.Status401Unauthorized && !path.Equals("/api/auth/login", StringComparison.OrdinalIgnoreCase) && !path.Equals("/api/auth/available-tenants", StringComparison.OrdinalIgnoreCase))
             await audit.WriteAsync("AuthenticationFailure", "Authentication", "Request was unauthorized.", code, ct: context.RequestAborted);
         else if (code == StatusCodes.Status403Forbidden)
-            await audit.WriteAsync("AuthorizationFailure", "Authorization", "Request was forbidden.", code, ct: context.RequestAborted);
+            await audit.WriteAsync("AuthorizationFailure", "Authorization", "Request was forbidden.", code, tenantId: auditTenantId, ct: context.RequestAborted);
         else if (!loginOrTenantLookup && (sensitive || code >= 400))
-            await audit.WriteAsync("SensitiveEndpointAccess", code >= 400 ? "HttpError" : "SensitiveAccess", null, code, ct: context.RequestAborted);
+            await audit.WriteAsync("SensitiveEndpointAccess", code >= 400 ? "HttpError" : "SensitiveAccess", null, code, tenantId: auditTenantId, ct: context.RequestAborted);
         else if (shouldRecordRequest)
-            await audit.WriteAsync("ApiRequest", "RequestTelemetry", statusCode: code, tenantId: tenant.TenantId, ct: context.RequestAborted);
+            await audit.WriteAsync("ApiRequest", "RequestTelemetry", statusCode: code, tenantId: auditTenantId, ct: context.RequestAborted);
     }
 }

@@ -14,6 +14,7 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString("DefaultConnection")
                                ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
+        services.AddScoped<ICurrentTenantService, CurrentTenantService>();
         services.AddDbContext<SecurityDbContext>(options =>
             options.UseSqlServer(connectionString));
 

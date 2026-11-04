@@ -39,6 +39,9 @@ public static class BootstrapDataSeeder
         }
 
         await using var scope = services.CreateAsyncScope();
+        var tenantService = scope.ServiceProvider.GetRequiredService<Application.Interfaces.ICurrentTenantService>();
+        using var crossTenantWrites = tenantService.AllowCrossTenantWrites();
+        using var seedTenant = tenantService.UseTenant(AlphaTenantId);
         var db = scope.ServiceProvider.GetRequiredService<SecurityDbContext>();
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
 

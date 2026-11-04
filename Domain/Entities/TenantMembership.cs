@@ -2,9 +2,10 @@ using System;
 
 namespace Domain.Entities;
 
-public class TenantMembership : BaseEntity
+public class TenantMembership : BaseEntity, ITenantOwnedEntity
 {
     public Guid TenantId { get; private set; }
+    public Guid? TenantOwnerId => TenantId;
     public Tenant Tenant { get; private set; } = null!;
     public Guid UserAccountId { get; private set; }
     public UserAccount UserAccount { get; private set; } = null!;

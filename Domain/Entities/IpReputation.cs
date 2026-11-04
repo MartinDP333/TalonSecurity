@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 
 namespace Domain.Entities;
 
-public class IpReputation : BaseEntity
+public class IpReputation : BaseEntity, ITenantOwnedEntity
 {
     public Guid? TenantId { get; private set; }
+    public Guid? TenantOwnerId => TenantId;
     public Tenant Tenant { get; private set; } = null!;
     public string IpAddress { get; private set; } = string.Empty;
     public int RiskScore { get; private set; }

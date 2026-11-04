@@ -2,9 +2,10 @@ using System;
 
 namespace Domain.Entities;
 
-public class ProtectedSite : BaseEntity
+public class ProtectedSite : BaseEntity, ITenantOwnedEntity
 {
     public Guid TenantId { get; private set; }
+    public Guid? TenantOwnerId => TenantId;
     public Tenant Tenant { get; private set; } = null!;
     public string Hostname { get; private set; }
     public string OriginUrl { get; private set; }

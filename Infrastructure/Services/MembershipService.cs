@@ -15,8 +15,9 @@ public sealed class MembershipService : IMembershipService
         _db = db;
     }
 
-    public async Task<IReadOnlyList<MembershipOverviewItem>> ListAsync(CancellationToken ct = default)
-        => await _db.TenantMemberships.AsNoTracking()
+    public async Task<IReadOnlyList<MembershipOverviewItem>> ListAsync(Guid tenantId, CancellationToken ct = default)
+        => await _db.TenantMemberships.IgnoreQueryFilters().AsNoTracking()
+            .Where(x => x.TenantId == tenantId)
             .Select(x => new MembershipOverviewItem(x.UserAccount.UserName, x.Role, x.IsActive, x.TenantId))
             .ToListAsync(ct);
 

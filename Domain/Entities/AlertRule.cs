@@ -1,11 +1,12 @@
-﻿using Domain.Enums;
+using Domain.Enums;
 using System;
 
 namespace Domain.Entities;
 
-public class AlertRule : BaseEntity
+public class AlertRule : BaseEntity, ITenantOwnedEntity
 {
     public Guid TenantId { get; private set; }
+    public Guid? TenantOwnerId => TenantId;
     public Tenant Tenant { get; private set; } = null!;
     public string RuleName { get; private set; }
     public string TriggerCondition { get; private set; }

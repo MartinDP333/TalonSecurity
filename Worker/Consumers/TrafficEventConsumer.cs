@@ -12,37 +12,56 @@ namespace Worker.Consumers;
 
 public class TrafficEventConsumer : IConsumer<TrafficEvent>
 {
-    private static readonly Guid SystemTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
     private readonly ILogger<TrafficEventConsumer> _logger;
     private readonly IConnectionMultiplexer _redis;
     private readonly SecurityDbContext _dbContext;
     private readonly IThreatLogService _threatLogService;
+    private readonly ICurrentTenantService _currentTenant;
 
     public TrafficEventConsumer(
         ILogger<TrafficEventConsumer> logger,
         IConnectionMultiplexer redis,
         SecurityDbContext dbContext,
-        IThreatLogService threatLogService)
+        IThreatLogService threatLogService,
+        ICurrentTenantService currentTenant)
     {
         _logger = logger;
         _redis = redis;
         _dbContext = dbContext;
         _threatLogService = threatLogService;
+        _currentTenant = currentTenant;
     }
 
     public async Task Consume(ConsumeContext<TrafficEvent> context)
     {
         var data = context.Message;
-        var db = _redis.GetDatabase();
-        var tenantId = data.SiteTenantId ?? data.TenantId;
-        if (!tenantId.HasValue && !string.IsNullOrWhiteSpace(data.Hostname))
+        var hostname = NormalizeHostname(data.Hostname);
+        if (string.IsNullOrWhiteSpace(hostname))
         {
-            tenantId = await _dbContext.ProtectedSites.IgnoreQueryFilters().AsNoTracking()
-                .Where(site => site.IsEnabled && site.Hostname == data.Hostname.Trim().ToLower())
-                .Select(site => (Guid?)site.TenantId)
-                .SingleOrDefaultAsync();
+            _logger.LogWarning("Ignoring traffic event {Endpoint}: no protected hostname was supplied.", data.Endpoint);
+            return;
         }
-        var resolvedTenantId = tenantId ?? SystemTenantId;
+
+        var resolvedSiteTenantId = await _dbContext.ProtectedSites.IgnoreQueryFilters().AsNoTracking()
+            .Where(site => site.IsEnabled && site.Hostname == hostname)
+            .Select(site => (Guid?)site.TenantId)
+            .SingleOrDefaultAsync();
+        if (!resolvedSiteTenantId.HasValue)
+        {
+            _logger.LogWarning("Ignoring traffic event {Endpoint}: hostname {Hostname} is not a registered protected site.", data.Endpoint, hostname);
+            return;
+        }
+
+        if (data.SiteTenantId.HasValue && data.SiteTenantId.Value != resolvedSiteTenantId.Value)
+        {
+            _logger.LogWarning("Ignoring traffic event {Endpoint}: supplied site tenant {SuppliedTenantId} conflicts with hostname {Hostname} tenant {ResolvedTenantId}.", data.Endpoint, data.SiteTenantId.Value, hostname, resolvedSiteTenantId.Value);
+            return;
+        }
+
+        var resolvedTenantId = resolvedSiteTenantId.Value;
+        using var tenantScope = _currentTenant.UseTenant(resolvedTenantId);
+        var db = _redis.GetDatabase();
         var redisKey = $"tenant:{resolvedTenantId}:ip:{data.IpAddress}:requests";
 
         var requestCount = await db.StringIncrementAsync(redisKey);
@@ -54,10 +73,6 @@ public class TrafficEventConsumer : IConsumer<TrafficEvent>
             "[REDIS CHECK] IP: {IpAddress} | Antal requests (sidste minut): {RequestCount} | Mistænkelig: {IsSuspicious}",
             data.IpAddress, requestCount, isSuspicious);
 
-        await _dbContext.Database.ExecuteSqlInterpolatedAsync($@"
-IF NOT EXISTS (SELECT 1 FROM dbo.Tenants WITH (UPDLOCK, HOLDLOCK) WHERE Id = {SystemTenantId})
-    INSERT INTO dbo.Tenants (Id, Name, CreatedAt)
-    VALUES ({SystemTenantId}, N'System', SYSUTCDATETIME());");
 
         var reputation = await _dbContext.IpReputations
             .IgnoreQueryFilters()
@@ -115,6 +130,15 @@ IF NOT EXISTS (SELECT 1 FROM dbo.Tenants WITH (UPDLOCK, HOLDLOCK) WHERE Id = {Sy
             _logger.LogError(ex, "Unable to save traffic state for tenant {TenantId}, IP {IpAddress}", resolvedTenantId, data.IpAddress);
             throw;
         }
+    }
+
+private static string NormalizeHostname(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+        var hostname = value.Trim();
+        if (Uri.TryCreate(hostname, UriKind.Absolute, out var uri)) hostname = uri.Host;
+        else if (hostname.Contains(':')) hostname = hostname[..hostname.LastIndexOf(':')];
+        return hostname.TrimEnd('.').ToLowerInvariant();
     }
 
     private static bool IsUniqueConstraintViolation(DbUpdateException exception)

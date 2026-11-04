@@ -18,8 +18,9 @@ var host = Host.CreateDefaultBuilder(args)
         var sqlConnectionString = configuration.GetConnectionString("DefaultConnection")
                                   ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
 
+        services.AddScoped<ICurrentTenantService, Infrastructure.Services.CurrentTenantService>();
         services.AddDbContext<SecurityDbContext>(options =>
-            options.UseSqlServer(sqlConnectionString));
+            options.UseSqlServer(sqlConnectionString), contextLifetime: ServiceLifetime.Scoped, optionsLifetime: ServiceLifetime.Scoped);
 
         services.AddSingleton(sp => new GeoIpCountryLookup(
             sp.GetRequiredService<ILogger<GeoIpCountryLookup>>(),

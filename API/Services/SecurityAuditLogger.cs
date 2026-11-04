@@ -14,6 +14,7 @@ public sealed class SecurityAuditLogger
     private readonly IHttpContextAccessor _http;
     private readonly ILogger<SecurityAuditLogger> _logger;
     private readonly GeoIpCountryLookup _geoIp;
+    private static readonly Guid SystemTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 
     public SecurityAuditLogger(SecurityDbContext db, ICurrentTenantService tenant, IHttpContextAccessor http, ILogger<SecurityAuditLogger> logger, GeoIpCountryLookup geoIp)
         => (_db, _tenant, _http, _logger, _geoIp) = (db, tenant, http, logger, geoIp);
@@ -38,8 +39,10 @@ public sealed class SecurityAuditLogger
             details = $"{details}; failed attempts from source IP in last 15m: {totalFailures}";
         }
 
+        var resolvedTenantId = tenantId ?? _tenant.TenantId ?? SystemTenantId;
+        using var tenantScope = _tenant.UseTenant(resolvedTenantId);
         var audit = new SecurityAuditEvent(
-            tenantId ?? _tenant.TenantId,
+            resolvedTenantId,
             userName ?? context?.User.FindFirst("sub")?.Value ?? context?.User.Identity?.Name,
             eventType,
             category,

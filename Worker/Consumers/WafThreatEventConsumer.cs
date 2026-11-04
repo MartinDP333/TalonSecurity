@@ -12,9 +12,10 @@ public sealed class WafThreatEventConsumer : IConsumer<WafThreatEvent>
     private readonly IThreatLogService _threatLogService;
     private readonly Infrastructure.Persistence.SecurityDbContext _db;
     private readonly ILogger<WafThreatEventConsumer> _logger;
+    private readonly Application.Interfaces.ICurrentTenantService _currentTenant;
 
-    public WafThreatEventConsumer(IThreatLogService threatLogService, Infrastructure.Persistence.SecurityDbContext db, ILogger<WafThreatEventConsumer> logger)
-        => (_threatLogService, _db, _logger) = (threatLogService, db, logger);
+    public WafThreatEventConsumer(IThreatLogService threatLogService, Infrastructure.Persistence.SecurityDbContext db, ILogger<WafThreatEventConsumer> logger, Application.Interfaces.ICurrentTenantService currentTenant)
+        => (_threatLogService, _db, _logger, _currentTenant) = (threatLogService, db, logger, currentTenant);
 
     public async Task Consume(ConsumeContext<WafThreatEvent> context)
     {
@@ -37,6 +38,7 @@ public sealed class WafThreatEventConsumer : IConsumer<WafThreatEvent>
             return;
         }
 
+        using var tenantScope = _currentTenant.UseTenant(tenantId);
         await _threatLogService.LogThreatAsync(tenantId, item.SourceIp, item.RequestPath, item.AttackType, SeverityLevel.High, item.RawPayload);
         _logger.LogInformation("Saved WAF threat {EventId} as {AttackType} for tenant {TenantId}", item.EventId, item.AttackType, tenantId);
     }

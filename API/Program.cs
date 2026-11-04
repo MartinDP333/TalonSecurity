@@ -14,7 +14,6 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddControllers();
-builder.Services.AddScoped<ICurrentTenantService, CurrentTenantService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<SecurityAuditLogger>();
 

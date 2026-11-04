@@ -20,7 +20,8 @@ public sealed class MembershipsController : ControllerBase
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
         if (!User.IsInRole("Admin") && !User.IsInRole("PlatformAdmin")) return Forbid();
-        var items = await _memberships.ListAsync(cancellationToken);
+        if (!_tenant.TenantId.HasValue) return Forbid();
+        var items = await _memberships.ListAsync(_tenant.TenantId.Value, cancellationToken);
         return Ok(items);
     }
 
@@ -64,7 +65,10 @@ public sealed class MembershipsController : ControllerBase
 
     [HttpGet("roles")]
     public async Task<IActionResult> Roles(CancellationToken cancellationToken)
-        => Ok(await _memberships.GetRolesAsync());
+    {
+        if (!_tenant.TenantId.HasValue) return Forbid();
+        return Ok(await _memberships.GetRolesAsync());
+    }
 
     public sealed record InviteRequest(string UserName, string Role = "Viewer");
 }

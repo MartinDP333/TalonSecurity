@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using Application.Interfaces;
 using Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
@@ -12,8 +12,10 @@ namespace API.Controllers;
 public sealed class PlatformAdminController : ControllerBase
 {
     private readonly IPlatformAdminService _platformAdmin;
+    private readonly ICurrentTenantService _currentTenant;
 
-    public PlatformAdminController(IPlatformAdminService platformAdmin) => _platformAdmin = platformAdmin;
+    public PlatformAdminController(IPlatformAdminService platformAdmin, ICurrentTenantService currentTenant)
+        => (_platformAdmin, _currentTenant) = (platformAdmin, currentTenant);
 
     [HttpGet("users")]
     public async Task<IActionResult> Users(CancellationToken ct)
@@ -52,6 +54,7 @@ public sealed class PlatformAdminController : ControllerBase
     [HttpPost("memberships")]
     public async Task<IActionResult> AddMembership(AddMembershipRequest request, CancellationToken ct)
     {
+        using var targetTenant = _currentTenant.UseTenant(request.TenantId);
         var membership = await _platformAdmin.AddMembershipAsync(request.TenantId, request.UserName, request.Role, ct);
         if (membership is null)
         {
@@ -74,6 +77,7 @@ public sealed class PlatformAdminController : ControllerBase
     [HttpPut("memberships")]
     public async Task<IActionResult> UpdateMembership(UpdateMembershipRequest request, CancellationToken ct)
     {
+        using var targetTenant = _currentTenant.UseTenant(request.TenantId);
         var membership = await _platformAdmin.UpdateMembershipAsync(request.TenantId, request.UserName, request.Role, ct);
         if (membership is null)
         {

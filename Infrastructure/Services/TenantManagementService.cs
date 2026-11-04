@@ -10,10 +10,12 @@ namespace Infrastructure.Services;
 public sealed class TenantManagementService : IPlatformAdminService, ITenantCatalogService
 {
     private readonly SecurityDbContext _db;
+    private readonly ICurrentTenantService _currentTenant;
 
-    public TenantManagementService(SecurityDbContext db)
+    public TenantManagementService(SecurityDbContext db, ICurrentTenantService currentTenant)
     {
         _db = db;
+        _currentTenant = currentTenant;
     }
 
     public async Task<IReadOnlyList<UserAccountListItem>> GetUsersAsync(CancellationToken ct = default)
@@ -50,6 +52,7 @@ public sealed class TenantManagementService : IPlatformAdminService, ITenantCata
             return null;
 
         var tenant = new Tenant(tenantName);
+        using var tenantScope = _currentTenant.UseTenant(tenant.Id);
         _db.Tenants.Add(tenant);
         _db.TenantMemberships.Add(new TenantMembership(tenant.Id, owner.Id, TenantRole.Admin.ToString()));
         await _db.SaveChangesAsync(ct);

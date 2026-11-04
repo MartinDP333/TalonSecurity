@@ -2,9 +2,10 @@ using System;
 
 namespace Domain.Entities;
 
-public class SimulationScenario : BaseEntity
+public class SimulationScenario : BaseEntity, ITenantOwnedEntity
 {
     public Guid TenantId { get; private set; }
+    public Guid? TenantOwnerId => TenantId;
     public Tenant Tenant { get; private set; } = null!;
     public string ScenarioName { get; private set; }
     public string Description { get; private set; }

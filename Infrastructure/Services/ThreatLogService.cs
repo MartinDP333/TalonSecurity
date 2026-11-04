@@ -10,11 +10,13 @@ public class ThreatLogService : IThreatLogService
 {
     private readonly SecurityDbContext _context;
     private readonly GeoIpCountryLookup _geoIp;
+    private readonly Application.Interfaces.ICurrentTenantService _currentTenant;
 
-    public ThreatLogService(SecurityDbContext context, GeoIpCountryLookup geoIp)
+    public ThreatLogService(SecurityDbContext context, GeoIpCountryLookup geoIp, Application.Interfaces.ICurrentTenantService currentTenant)
     {
         _context = context;
         _geoIp = geoIp;
+        _currentTenant = currentTenant;
     }
 
     public async Task LogThreatAsync(
@@ -25,6 +27,7 @@ public class ThreatLogService : IThreatLogService
         SeverityLevel severity,
         string rawPayload)
     {
+        using var tenantScope = _currentTenant.UseTenant(tenantId);
         var countryCode = _geoIp.LookupCountryCode(sourceIp);
         var existingLog = await _context.ThreatLogs
             .IgnoreQueryFilters()

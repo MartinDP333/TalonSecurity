@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 
 namespace Domain.Entities;
 
-public class AutomatedResponseAction : BaseEntity
+public class AutomatedResponseAction : BaseEntity, ITenantOwnedEntity
 {
     public Guid TenantId { get; private set; }
+    public Guid? TenantOwnerId => TenantId;
     public Tenant Tenant { get; private set; } = null!;
     public Guid ThreatLogId { get; private set; }
     public ThreatLog ThreatLog { get; private set; } = null!;

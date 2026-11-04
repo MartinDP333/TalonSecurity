@@ -1,11 +1,12 @@
-﻿using Domain.Enums;
+using Domain.Enums;
 using System;
 
 namespace Domain.Entities;
 
-public class ThreatLog : BaseEntity
+public class ThreatLog : BaseEntity, ITenantOwnedEntity
 {
     public Guid TenantId { get; private set; }
+    public Guid? TenantOwnerId => TenantId;
     public Tenant Tenant { get; private set; } = null!;
     public string SourceIp { get; private set; }
     public string RequestPath { get; private set; }

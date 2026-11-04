@@ -30,8 +30,83 @@ public class SecurityDbContext : DbContext
     public DbSet<ProtectedSite> ProtectedSites => Set<ProtectedSite>();
     public DbSet<SecurityAuditEvent> SecurityAuditEvents => Set<SecurityAuditEvent>();
 
-    public override int SaveChanges() { AddEntityAuditEvents(); return base.SaveChanges(); }
-    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) { AddEntityAuditEvents(); return base.SaveChangesAsync(cancellationToken); }
+    public override int SaveChanges()
+    {
+        ValidateTenantWrites();
+        AddEntityAuditEvents();
+        ValidateTenantWrites();
+        return base.SaveChanges();
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        => SaveChangesAsync(acceptAllChangesOnSuccess: true, cancellationToken);
+
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        ValidateTenantWrites();
+        AddEntityAuditEvents();
+        ValidateTenantWrites();
+        return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void ValidateTenantWrites()
+    {
+        if (_currentTenantService?.CanWriteAcrossTenants == true)
+            return;
+
+        ChangeTracker.DetectChanges();
+        foreach (var entry in ChangeTracker.Entries<ITenantOwnedEntity>()
+                     .Where(entry => entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
+        {
+            var entityTenantId = entry.Entity.TenantOwnerId;
+            if (!entityTenantId.HasValue)
+                throw new InvalidOperationException($"Tenant ownership is required for {entry.Metadata.ClrType.Name} writes.");
+
+            if (!CurrentTenantId.HasValue || CurrentTenantId.Value == Guid.Empty || entityTenantId.Value != CurrentTenantId.Value)
+                throw new InvalidOperationException($"Cross-tenant write rejected for {entry.Metadata.ClrType.Name}: entity tenant {entityTenantId} does not match active tenant {CurrentTenantId}.");
+
+            if (entry.State is EntityState.Modified or EntityState.Deleted)
+            {
+                var originalTenantId = entry.Property("TenantId").OriginalValue as Guid?;
+                if (originalTenantId != CurrentTenantId)
+                    throw new InvalidOperationException($"Cross-tenant {entry.State.ToString().ToLowerInvariant()} rejected for {entry.Metadata.ClrType.Name}: stored tenant {originalTenantId} does not match active tenant {CurrentTenantId}.");
+            }
+
+            switch (entry.Entity)
+            {
+                case Notification notification when notification.ThreatLogId.HasValue:
+                    ValidateRelatedTenant<ThreatLog>(entry, notification.ThreatLogId.Value, notification.TenantId);
+                    break;
+                case AutomatedResponseAction action:
+                    ValidateRelatedTenant<ThreatLog>(entry, action.ThreatLogId, action.TenantId);
+                    break;
+            }
+        }
+    }
+
+    private void ValidateRelatedTenant<TRelated>(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry owner, Guid relatedId, Guid ownerTenantId)
+        where TRelated : class, ITenantOwnedEntity
+    {
+        var relatedEntry = ChangeTracker.Entries<TRelated>().FirstOrDefault(entry => entry.Entity is BaseEntity entity && entity.Id == relatedId);
+        Guid? relatedTenantId = relatedEntry?.Entity.TenantOwnerId;
+        if (!relatedTenantId.HasValue)
+        {
+            var tenantProperty = typeof(TRelated).GetProperty(nameof(ITenantOwnedEntity.TenantOwnerId));
+            if (tenantProperty is null)
+                throw new InvalidOperationException($"Unable to validate tenant relationship for {owner.Metadata.ClrType.Name}.");
+
+            var tenantType = Nullable.GetUnderlyingType(tenantProperty.PropertyType) ?? tenantProperty.PropertyType;
+            relatedTenantId = tenantType == typeof(Guid)
+                ? Set<TRelated>().IgnoreQueryFilters().AsNoTracking()
+                    .Where(entity => EF.Property<Guid>(entity, "Id") == relatedId)
+                    .Select(entity => (Guid?)EF.Property<Guid>(entity, nameof(ITenantOwnedEntity.TenantOwnerId)))
+                    .SingleOrDefault()
+                : null;
+        }
+
+        if (relatedTenantId != ownerTenantId)
+            throw new InvalidOperationException($"Cross-tenant relationship rejected for {owner.Metadata.ClrType.Name}.");
+    }
 
     private void AddEntityAuditEvents()
     {

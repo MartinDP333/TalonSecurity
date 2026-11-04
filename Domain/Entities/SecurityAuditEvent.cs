@@ -3,9 +3,10 @@ using System;
 
 namespace Domain.Entities;
 
-public class SecurityAuditEvent : BaseEntity
+public class SecurityAuditEvent : BaseEntity, ITenantOwnedEntity
 {
     public Guid? TenantId { get; private set; }
+    public Guid? TenantOwnerId => TenantId;
     public string? UserName { get; private set; }
     public string EventType { get; private set; }
     public string Category { get; private set; }
