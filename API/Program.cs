@@ -94,12 +94,14 @@ app.MapGet("/api/health", () => new { Status = "Healthy", Message = "Talon API k
 app.MapControllers();
 app.MapGet("/", () => Results.Redirect("/swagger")).AllowAnonymous();
 
-using (var scope = app.Services.CreateScope())
+if (!app.Configuration.GetValue<bool>("Database:SkipMigrations"))
 {
+    using var scope = app.Services.CreateScope();
     var context = scope.ServiceProvider.GetRequiredService<SecurityDbContext>();
     await context.Database.MigrateAsync();
 }
 
-await BootstrapDataSeeder.SeedAsync(app.Services, app.Configuration, app.Logger);
+if (!app.Configuration.GetValue<bool>("Bootstrap:SkipSeeding"))
+    await BootstrapDataSeeder.SeedAsync(app.Services, app.Configuration, app.Logger);
 
 app.Run();
