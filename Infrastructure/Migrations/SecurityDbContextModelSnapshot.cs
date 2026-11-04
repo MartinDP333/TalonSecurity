@@ -201,6 +201,13 @@ namespace Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("CountryCode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(5)
+                        .HasColumnType("nvarchar(5)")
+                        .HasDefaultValue("ZZ");
+
                     b.Property<string>("Details")
                         .IsRequired()
                         .HasMaxLength(2000)
@@ -244,6 +251,8 @@ namespace Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("TenantId", "OccurredAt");
+
+                    b.HasIndex("TenantId", "CountryCode", "OccurredAt");
 
                     b.ToTable("SecurityAuditEvents");
                 });

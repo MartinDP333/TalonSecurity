@@ -29,6 +29,27 @@ services:
     networks:
       - talon_internal
 
+  talon-worker:
+    build:
+      context: .
+      dockerfile: Worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      ConnectionStrings__DefaultConnection: Server=db-mssql;Database=TalonSecurityDb;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True
+      ConnectionStrings__Redis: redis:6379
+      RabbitMQ__HostName: rabbitmq
+      RabbitMQ__UserName: ${RABBITMQ_DEFAULT_USER}
+      RabbitMQ__Password: ${RABBITMQ_DEFAULT_PASS}
+      GeoIP__DatabasePath: /geoip/GeoLite2-Country.mmdb
+    volumes:
+      - ./geoip:/geoip:ro
+    depends_on:
+      - db-mssql
+      - rabbitmq
+      - redis
+    networks:
+      - talon_internal
+
   talon-api:
     build:
       context: .
@@ -43,6 +64,9 @@ services:
       RabbitMQ__HostName: rabbitmq
       RabbitMQ__UserName: ${RABBITMQ_DEFAULT_USER}
       RabbitMQ__Password: ${RABBITMQ_DEFAULT_PASS}
+      GeoIP__DatabasePath: /geoip/GeoLite2-Country.mmdb
+    volumes:
+      - ./geoip:/geoip:ro
     depends_on:
       - db-mssql
       - rabbitmq

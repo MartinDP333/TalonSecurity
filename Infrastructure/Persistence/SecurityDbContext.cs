@@ -56,7 +56,7 @@ public class SecurityDbContext : DbContext
             var changes = entry.Properties.Where(p => entry.State != EntityState.Modified || p.IsModified)
                 .Select(p => p.Metadata.Name).Where(n => n is not "PasswordHash" and not "RawPayload")
                 .Take(30);
-            SecurityAuditEvents.Add(new SecurityAuditEvent(tenantId, null, $"Entity{entry.State}", "DatabaseChange", "INTERNAL", name, null, null, string.Join(",", changes)));
+            SecurityAuditEvents.Add(new SecurityAuditEvent(tenantId, null, $"Entity{entry.State}", "DatabaseChange", "INTERNAL", name, null, "ZZ", null, string.Join(",", changes)));
         }
     }
 
@@ -82,6 +82,8 @@ public class SecurityDbContext : DbContext
             e.Property(x => x.HttpMethod).IsRequired().HasMaxLength(20);
             e.Property(x => x.RequestPath).IsRequired().HasMaxLength(500);
             e.Property(x => x.SourceIp).HasMaxLength(45);
+            e.Property(x => x.CountryCode).HasMaxLength(5).HasDefaultValue("ZZ");
+            e.HasIndex(x => new { x.TenantId, x.CountryCode, x.OccurredAt });
             e.Property(x => x.Details).IsRequired().HasMaxLength(2000);
             e.Property(e => e.Severity).HasConversion<int>();
             e.HasIndex(x => new { x.TenantId, x.OccurredAt });

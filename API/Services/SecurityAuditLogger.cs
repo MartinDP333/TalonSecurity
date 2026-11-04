@@ -2,6 +2,7 @@ using Application.Interfaces;
 using Domain.Entities;
 using Domain.Enums;
 using Infrastructure.Persistence;
+using Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace API.Services;
@@ -12,14 +13,16 @@ public sealed class SecurityAuditLogger
     private readonly ICurrentTenantService _tenant;
     private readonly IHttpContextAccessor _http;
     private readonly ILogger<SecurityAuditLogger> _logger;
+    private readonly GeoIpCountryLookup _geoIp;
 
-    public SecurityAuditLogger(SecurityDbContext db, ICurrentTenantService tenant, IHttpContextAccessor http, ILogger<SecurityAuditLogger> logger)
-        => (_db, _tenant, _http, _logger) = (db, tenant, http, logger);
+    public SecurityAuditLogger(SecurityDbContext db, ICurrentTenantService tenant, IHttpContextAccessor http, ILogger<SecurityAuditLogger> logger, GeoIpCountryLookup geoIp)
+        => (_db, _tenant, _http, _logger, _geoIp) = (db, tenant, http, logger, geoIp);
 
     public async Task WriteAsync(string eventType, string category, string? details = null, int? statusCode = null, string? userName = null, Guid? tenantId = null, CancellationToken ct = default)
     {
         var context = _http.HttpContext;
         var sourceIp = API.ClientIpAddress.Get(context ?? new DefaultHttpContext());
+        var countryCode = _geoIp.LookupCountryCode(sourceIp);
         var severity = Classify(eventType, category, statusCode);
 
         if (eventType == "LoginFailure" && !string.IsNullOrWhiteSpace(sourceIp))
@@ -43,6 +46,7 @@ public sealed class SecurityAuditLogger
             context?.Request.Method ?? "INTERNAL",
             context?.Request.Path.Value ?? "",
             sourceIp,
+            countryCode,
             statusCode,
             details,
             severity);

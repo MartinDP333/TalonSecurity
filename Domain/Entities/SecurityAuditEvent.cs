@@ -12,6 +12,7 @@ public class SecurityAuditEvent : BaseEntity
     public string HttpMethod { get; private set; }
     public string RequestPath { get; private set; }
     public string? SourceIp { get; private set; }
+    public string CountryCode { get; private set; }
     public int? StatusCode { get; private set; }
     public string Details { get; private set; }
     public SeverityLevel Severity { get; private set; }
@@ -19,7 +20,7 @@ public class SecurityAuditEvent : BaseEntity
 
     private SecurityAuditEvent() { }
 
-    public SecurityAuditEvent(Guid? tenantId, string? userName, string eventType, string category, string httpMethod, string requestPath, string? sourceIp, int? statusCode, string? details, SeverityLevel severity = SeverityLevel.Low)
+    public SecurityAuditEvent(Guid? tenantId, string? userName, string eventType, string category, string httpMethod, string requestPath, string? sourceIp, string countryCode, int? statusCode, string? details, SeverityLevel severity = SeverityLevel.Low)
     {
         TenantId = tenantId;
         UserName = Limit(userName, 200);
@@ -28,6 +29,7 @@ public class SecurityAuditEvent : BaseEntity
         HttpMethod = Limit(httpMethod, 20) ?? "";
         RequestPath = Limit(requestPath, 500) ?? "";
         SourceIp = Limit(sourceIp, 45);
+        CountryCode = Limit(countryCode, 5) ?? "ZZ";
         StatusCode = statusCode;
         Details = Limit(details, 2000) ?? string.Empty;
         Severity = severity;

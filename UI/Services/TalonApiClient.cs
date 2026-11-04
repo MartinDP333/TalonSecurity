@@ -334,10 +334,10 @@ public sealed class TalonApiClient
     public sealed record AvailableTenant(Guid TenantId, string TenantName, string Role, string? Hostname = null);
     public sealed record MemberView(string UserName, string Role, bool IsActive, Guid TenantId);
     public sealed record LoginResponse(string AccessToken, Guid TenantId, string TenantName, string Role, bool IsPlatformAdmin, string? Hostname = null, Guid SiteTenantId = default);
-    public sealed record TimelineItem(Guid Id, string RecordType, DateTime OccurredAt, string EventType, string? SourceIp, string RequestPath, int Severity, int? HitCount, string? Details);
+    public sealed record TimelineItem(Guid Id, string RecordType, DateTime OccurredAt, string EventType, string? SourceIp, string CountryCode, string HttpMethod, int? StatusCode, string RequestPath, int Severity, int? HitCount, string? Details);
     public sealed record PriorityNotification(Guid TenantId, string TenantName, string RecordType, string EventType, int Severity, string? SourceIp, string RequestPath, string Details, DateTime OccurredAt);
     public sealed record ThreatLogView(Guid Id, string SourceIp, string RequestPath, string AttackType, int Severity, int HitCount, DateTime FirstSeenAt, DateTime LastSeenAt, string CountryCode);
-    public sealed record AuditEventView(Guid Id, string EventType, string Category, string? SourceIp, string RequestPath, int Severity, DateTime OccurredAt, string Details);
+    public sealed record AuditEventView(Guid Id, string EventType, string Category, string? SourceIp, string CountryCode, string HttpMethod, string RequestPath, int? StatusCode, int Severity, DateTime OccurredAt, string Details);
     public sealed record CartResult(string Message, string Ip, Guid? TenantId);
     public sealed record BankingDashboard(string Application, Guid? TenantId, string Message, string AccountHolder, string AccountNumber, decimal AvailableBalance, string SourceIp, DateTime Timestamp);
     public sealed record BankingTransferResult(string Application, Guid? TenantId, string Message, string SourceIp, string Status, DateTime Timestamp);

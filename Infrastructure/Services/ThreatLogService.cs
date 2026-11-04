@@ -9,10 +9,12 @@ namespace Infrastructure.Services;
 public class ThreatLogService : IThreatLogService
 {
     private readonly SecurityDbContext _context;
+    private readonly GeoIpCountryLookup _geoIp;
 
-    public ThreatLogService(SecurityDbContext context)
+    public ThreatLogService(SecurityDbContext context, GeoIpCountryLookup geoIp)
     {
         _context = context;
+        _geoIp = geoIp;
     }
 
     public async Task LogThreatAsync(
@@ -21,16 +23,16 @@ public class ThreatLogService : IThreatLogService
         string requestPath,
         string attackType,
         SeverityLevel severity,
-        string rawPayload,
-        string countryCode)
+        string rawPayload)
     {
+        var countryCode = _geoIp.LookupCountryCode(sourceIp);
         var existingLog = await _context.ThreatLogs
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(t => t.SourceIp == sourceIp
                                    && t.RequestPath == requestPath
                                    && t.TenantId == tenantId);
 
-        if (existingLog != null)
+        if (existingLog is not null)
         {
             existingLog.RegisterNewHit();
         }

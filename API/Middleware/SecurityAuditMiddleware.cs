@@ -16,11 +16,11 @@ public sealed class SecurityAuditMiddleware
         var path = context.Request.Path.Value ?? "";
         var loginOrTenantLookup = path.Equals("/api/auth/login", StringComparison.OrdinalIgnoreCase)
             || path.Equals("/api/auth/available-tenants", StringComparison.OrdinalIgnoreCase);
-        var sensitive = !loginOrTenantLookup && (path.StartsWith("/api/auth", StringComparison.OrdinalIgnoreCase)
+        var shouldRecordRequest = path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase);
+        var sensitive = path.StartsWith("/api/auth", StringComparison.OrdinalIgnoreCase)
             || path.StartsWith("/api/memberships", StringComparison.OrdinalIgnoreCase)
             || path.StartsWith("/api/platform-admin", StringComparison.OrdinalIgnoreCase)
-            || path.StartsWith("/api/protected-sites", StringComparison.OrdinalIgnoreCase)
-            || path.StartsWith("/test-apps", StringComparison.OrdinalIgnoreCase));
+            || path.StartsWith("/api/protected-sites", StringComparison.OrdinalIgnoreCase);
 
         try
         {
@@ -41,5 +41,7 @@ public sealed class SecurityAuditMiddleware
             await audit.WriteAsync("AuthorizationFailure", "Authorization", "Request was forbidden.", code, ct: context.RequestAborted);
         else if (!loginOrTenantLookup && (sensitive || code >= 400))
             await audit.WriteAsync("SensitiveEndpointAccess", code >= 400 ? "HttpError" : "SensitiveAccess", null, code, ct: context.RequestAborted);
+        else if (shouldRecordRequest)
+            await audit.WriteAsync("ApiRequest", "RequestTelemetry", statusCode: code, tenantId: tenant.TenantId, ct: context.RequestAborted);
     }
 }

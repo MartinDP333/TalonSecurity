@@ -37,7 +37,7 @@ public sealed class WafThreatEventConsumer : IConsumer<WafThreatEvent>
             return;
         }
 
-        await _threatLogService.LogThreatAsync(tenantId, item.SourceIp, item.RequestPath, item.AttackType, SeverityLevel.High, item.RawPayload, "N/A");
+        await _threatLogService.LogThreatAsync(tenantId, item.SourceIp, item.RequestPath, item.AttackType, SeverityLevel.High, item.RawPayload);
         _logger.LogInformation("Saved WAF threat {EventId} as {AttackType} for tenant {TenantId}", item.EventId, item.AttackType, tenantId);
     }
 }

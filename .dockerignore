@@ -1,6 +1,7 @@
 **/bin/
 **/obj/
 **/artifacts/
+geoip/
 .git/
 .github/
 .vs/

@@ -71,6 +71,8 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
     options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse("10.244.0.0/24"));
+    if (builder.Environment.IsDevelopment())
+        options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse("172.16.0.0/12"));
     options.ForwardLimit = 1;
 });
 
@@ -83,8 +85,8 @@ app.UseSwaggerUI(options =>
     options.RoutePrefix = "swagger";
 });
 app.UseAuthentication();
-app.UseMiddleware<TenantResolutionMiddleware>();
 app.UseMiddleware<SecurityAuditMiddleware>();
+app.UseMiddleware<TenantResolutionMiddleware>();
 app.UseAuthorization();
 app.UseMiddleware<IpBlockingMiddleware>();
 app.UseMiddleware<TrafficTrackingMiddleware>();

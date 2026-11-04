@@ -21,6 +21,9 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddDbContext<SecurityDbContext>(options =>
             options.UseSqlServer(sqlConnectionString));
 
+        services.AddSingleton(sp => new GeoIpCountryLookup(
+            sp.GetRequiredService<ILogger<GeoIpCountryLookup>>(),
+            configuration["GeoIP:DatabasePath"] ?? Environment.GetEnvironmentVariable("GeoIP__DatabasePath")));
         services.AddScoped<IThreatLogService, ThreatLogService>();
 
         services.AddMassTransit(x =>

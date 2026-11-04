@@ -37,6 +37,7 @@ else
                     <th>Severity</th>
                     <th>Event</th>
                     <th>Source IP</th>
+                    <th>Country</th>
                     <th>Request path</th>
                     <th>Details</th>
                 </tr>
@@ -50,6 +51,7 @@ else
                     <td><span class="badge @SeverityClass(item.Severity)">@SeverityName(item.Severity)</span></td>
                     <td>@item.EventType</td>
                     <td>@(string.IsNullOrWhiteSpace(item.SourceIp) ? "-" : item.SourceIp)</td>
+                    <td>@(string.IsNullOrWhiteSpace(item.CountryCode) || item.CountryCode == "ZZ" ? "Unknown" : item.CountryCode)</td>
                     <td>@(string.IsNullOrWhiteSpace(item.RequestPath) ? "-" : item.RequestPath)</td>
                     <td>@(string.IsNullOrWhiteSpace(item.Details) ? "-" : item.Details)</td>
                 </tr>

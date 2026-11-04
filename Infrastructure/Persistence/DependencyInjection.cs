@@ -1,8 +1,9 @@
-﻿using Application.Interfaces;
+using Application.Interfaces;
 using Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.Persistence;
 
@@ -17,6 +18,9 @@ public static class DependencyInjection
             options.UseSqlServer(connectionString));
 
         services.AddScoped<IIpReputationRepository, IpReputationRepository>();
+        services.AddSingleton(sp => new GeoIpCountryLookup(
+            sp.GetRequiredService<ILogger<GeoIpCountryLookup>>(),
+            configuration["GeoIP:DatabasePath"] ?? Environment.GetEnvironmentVariable("GeoIP__DatabasePath")));
         services.AddScoped<IThreatLogService, ThreatLogService>();
         services.AddScoped<IAuthenticationService, AuthenticationService>();
         services.AddScoped<IProtectedSiteService, ProtectedSiteService>();

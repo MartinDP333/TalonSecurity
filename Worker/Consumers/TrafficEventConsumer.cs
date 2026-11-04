@@ -94,8 +94,7 @@ IF NOT EXISTS (SELECT 1 FROM dbo.Tenants WITH (UPDLOCK, HOLDLOCK) WHERE Id = {Sy
                 requestPath: data.Endpoint ?? "/api/cart/add",
                 attackType: "RateLimit / Spam",
                 severity: SeverityLevel.High,
-                rawPayload: data.UserAgent ?? "Ukendt",
-                countryCode: "DK"
+                rawPayload: data.UserAgent ?? "Ukendt"
             );
         }
 

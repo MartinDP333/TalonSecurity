@@ -40,6 +40,12 @@ spec:
           value: "Server=db-mssql;Database=TalonSecurityDb;User Id=sa;Password=$(MSSQL_SA_PASSWORD);TrustServerCertificate=True"
         - name: ConnectionStrings__Redis
           value: "redis:6379"
+        - name: GeoIP__DatabasePath
+          value: /geoip/GeoLite2-Country.mmdb
+        volumeMounts:
+        - name: geoip-database
+          mountPath: /geoip
+          readOnly: true
         resources:
           limits:
             memory: "512Mi"
@@ -47,3 +53,18 @@ spec:
           requests:
             memory: "256Mi"
             cpu: "250m"
+      volumes:
+      - name: geoip-database
+        persistentVolumeClaim:
+          claimName: geoip-database
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: geoip-database
+spec:
+  accessModes:
+  - ReadOnlyMany
+  resources:
+    requests:
+      storage: 10Mi
