@@ -149,3 +149,4 @@ public sealed class TenantManagementService : IPlatformAdminService, ITenantCata
             .Select(t => new TenantDetail(t.Id, t.Name, t.CreatedAt))
             .SingleOrDefaultAsync(ct);
 }
+ 
